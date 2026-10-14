@@ -1,0 +1,135 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Icons follow the inherited foreground so buttons can tint them on hover. -->
+  <Style Selector="Path.icon">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Stretch" Value="None" />
+    <Setter Property="StrokeThickness" Value="1.2" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="Stroke" Value="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource Self}}" />
+  </Style>
+  <Style Selector="Path.icon.file">
+    <Setter Property="Stroke" Value="{DynamicResource Brush.Icon}" />
+  </Style>
+  <Style Selector="Path.icon.folder">
+    <Setter Property="Stroke" Value="{DynamicResource Brush.IconStrong}" />
+    <Setter Property="Fill" Value="{DynamicResource Brush.IconFolderFill}" />
+  </Style>
+  <Style Selector="Path.chevron">
+    <Setter Property="Stroke" Value="{DynamicResource Brush.TextMuted}" />
+    <Setter Property="RenderTransform" Value="rotate(0deg)" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.08" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Path.chevron.expanded">
+    <Setter Property="RenderTransform" Value="rotate(90deg)" />
+  </Style>
+
+  <!-- Surfaces -->
+  <Style Selector="Border.island">
+    <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Island}" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Border.divider">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource Brush.Border}" />
+  </Style>
+
+  <!-- Splitters are the gaps between islands: invisible until hovered. -->
+  <Style Selector="GridSplitter.gap">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="MinWidth" Value="{DynamicResource Size.Gap}" />
+    <Setter Property="ResizeDirection" Value="Columns" />
+    <Setter Property="Focusable" Value="False" />
+  </Style>
+  <Style Selector="GridSplitter.gap:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Brush.SplitterHover}" />
+  </Style>
+
+  <!-- Typography -->
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.body">
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+  </Style>
+  <Style Selector="TextBlock.status">
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Caption}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.kbd">
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Caption}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Code}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- Top bar navigation -->
+  <Style Selector="Border.nav">
+    <Setter Property="Padding" Value="12,4" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+  </Style>
+  <Style Selector="Border.nav > TextBlock">
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+  </Style>
+  <Style Selector="Border.nav.active">
+    <Setter Property="Background" Value="{DynamicResource Brush.Raised}" />
+  </Style>
+  <Style Selector="Border.nav.active > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+  </Style>
+
+  <Style Selector="TextBox.inline">
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+  </Style>
+
+  <Style Selector="TreeView.explorer">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Ui}" />
+  </Style>
+
+  <!-- Tab close slot: dot while modified, close button on hover or for the active clean tab. -->
+  <Style Selector="Panel.closeslot > Button">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="ListBoxItem:selected Panel.closeslot:not(.modified) > Button">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="ListBoxItem:pointerover Panel.closeslot > Button">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Panel.closeslot > Ellipse">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="Panel.closeslot.modified > Ellipse">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="ListBoxItem:pointerover Panel.closeslot > Ellipse">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
+  <!-- An unfocused split keeps its current tab visible, but quieter. -->
+  <Style Selector="Border.pane:not(.active) ListBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource Brush.Selected}" />
+  </Style>
+</Styles>

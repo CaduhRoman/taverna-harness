@@ -1,0 +1,1 @@
+dotnet watch run --project .\Taverna.App\Taverna.App.csproj

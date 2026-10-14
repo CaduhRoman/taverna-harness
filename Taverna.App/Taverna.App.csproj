@@ -5,7 +5,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationIcon>Assets\taverna.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Only the derived, size-optimized assets ship; the source artwork stays in Assets for regeneration. -->
+    <AvaloniaResource Include="Assets\taverna-mark.png" />
+    <AvaloniaResource Include="Assets\taverna-icon.png" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.7" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.7" />

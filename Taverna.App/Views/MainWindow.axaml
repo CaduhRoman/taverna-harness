@@ -3,107 +3,151 @@
         xmlns:vm="using:Taverna.App.ViewModels"
         xmlns:views="using:Taverna.App.Views"
         x:Class="Taverna.App.Views.MainWindow"
-        Title="Taverna" Width="1440" Height="850" MinWidth="940" MinHeight="550"
-        Background="#0E1014">
+        x:DataType="vm:MainWindowViewModel" x:CompileBindings="True"
+        Title="{Binding WindowTitle}" Icon="/Assets/taverna-icon.png"
+        Width="1440" Height="860" MinWidth="940" MinHeight="550" WindowStartupLocation="CenterScreen"
+        Padding="{Binding $self.OffScreenMargin}"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}">
   <Window.Styles>
-    <Style Selector="Button.toolbar">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#B6BAC4" />
-      <Setter Property="CornerRadius" Value="5" />
-      <Setter Property="Padding" Value="9,6" />
-      <Setter Property="FontSize" Value="12" />
-    </Style>
-    <Style Selector="Button.toolbar:pointerover">
-      <Setter Property="Background" Value="#262B35" />
-    </Style>
-    <Style Selector="TreeViewItem">
+    <Style Selector="TreeViewItem" x:DataType="vm:FileNodeViewModel">
       <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
     </Style>
   </Window.Styles>
-  <Grid RowDefinitions="55,*,26">
-    <Border Grid.Row="0" Background="#171A20" BorderBrush="#2C3039" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="230,*,230" Margin="17,0">
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
-          <Border Width="25" Height="25" CornerRadius="5" Background="#E3C18E">
-            <TextBlock Text="T" Foreground="#171A20" FontWeight="Bold" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
-          </Border>
-          <TextBlock Text="TAVERNA" FontWeight="Bold" FontSize="13" Foreground="#F2F0EC" VerticalAlignment="Center" LetterSpacing="1.5" />
-        </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="5">
-          <Border Background="#353A46" CornerRadius="7" Padding="24,9">
-            <TextBlock Text="Editor" FontSize="13" FontWeight="SemiBold" Foreground="#FFFFFF" />
-          </Border>
-          <Border Padding="24,9" Opacity="0.46">
-            <TextBlock Text="Office · Soon" FontSize="13" Foreground="#CDD0D7" />
-          </Border>
-        </StackPanel>
-        <TextBlock Grid.Column="2" Text="LOCAL WORKSPACE" FontSize="10" Foreground="#707785" HorizontalAlignment="Right" VerticalAlignment="Center" LetterSpacing="1.2" />
-      </Grid>
-    </Border>
-    <Grid Grid.Row="1" ColumnDefinitions="246,4,*,4,320">
-      <Border Grid.Column="0" Background="#14171D" BorderBrush="#292D36" BorderThickness="0,0,1,0">
-        <Grid RowDefinitions="42,43,*">
-          <TextBlock Text="FILES" FontSize="11" FontWeight="Bold" Foreground="#BFC3CC" LetterSpacing="1.5" Margin="16,15,0,0" />
-          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="1" Margin="7,0" VerticalAlignment="Center">
-            <Button Classes="toolbar" Content="Open Folder" Command="{Binding OpenFolderCommand}" />
-            <Button Classes="toolbar" Content="↻" ToolTip.Tip="Refresh" Command="{Binding RefreshCommand}" />
-            <Button Classes="toolbar" Content="⊟" ToolTip.Tip="Collapse All" Command="{Binding CollapseAllCommand}" />
-          </StackPanel>
-          <TreeView Grid.Row="2" ItemsSource="{Binding RootNodes}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
-                    Background="Transparent" BorderThickness="0" Margin="7,2,5,8" FontSize="12">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- Top bar: identity, navigation, global actions -->
+    <Grid Name="TopBar" Height="{DynamicResource Size.TopBar}" ColumnDefinitions="*,Auto,*" Margin="14,0,8,0">
+      <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+        <Image Source="/Assets/taverna-mark.png" Height="17" RenderOptions.BitmapInterpolationMode="HighQuality" />
+        <TextBlock Text="Taverna" FontSize="{DynamicResource FontSize.Ui}" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <TextBlock Text="/" Classes="muted" VerticalAlignment="Center" IsVisible="{Binding HasProject}" />
+        <TextBlock Text="{Binding ProjectTitle}" Classes="body" VerticalAlignment="Center" IsVisible="{Binding HasProject}"
+                   MaxWidth="260" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ProjectDirectory}" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+        <Border Classes="nav active">
+          <TextBlock Text="Editor" />
+        </Border>
+        <Border Classes="nav" ToolTip.Tip="Coming soon">
+          <TextBlock Text="Office" />
+        </Border>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="2">
+        <Button Theme="{StaticResource IconButton}" Command="{Binding OpenFolderCommand}" ToolTip.Tip="Open Folder (Ctrl+O)">
+          <Path Classes="icon" Data="{StaticResource Icon.OpenFolder}" />
+        </Button>
+        <Button Theme="{StaticResource IconButton}" Command="{Binding SplitEditorCommand}" ToolTip.Tip="Split Right (Ctrl+\)">
+          <Path Classes="icon" Data="{StaticResource Icon.Split}" />
+        </Button>
+        <Border Width="1" Height="16" Margin="6,0" Background="{DynamicResource Brush.BorderStrong}" />
+        <ToggleButton Theme="{StaticResource IconToggle}" IsChecked="{Binding IsExplorerVisible, Mode=TwoWay}"
+                      ToolTip.Tip="Toggle Explorer (Ctrl+B)">
+          <Path Classes="icon" Data="{StaticResource Icon.PanelLeft}" />
+        </ToggleButton>
+        <ToggleButton Theme="{StaticResource IconToggle}" IsChecked="{Binding IsChatVisible, Mode=TwoWay}"
+                      ToolTip.Tip="Toggle Chat (Ctrl+Alt+B)">
+          <Path Classes="icon" Data="{StaticResource Icon.PanelRight}" />
+        </ToggleButton>
+      </StackPanel>
+    </Grid>
+
+    <!-- Workbench: explorer | editor splits | chat -->
+    <Grid Name="Workbench" Grid.Row="1" ColumnDefinitions="260,Auto,*,Auto,340" Margin="6,0">
+      <Border Name="ExplorerPanel" Classes="island">
+        <Grid RowDefinitions="Auto,Auto,*">
+          <Grid Height="{DynamicResource Size.PanelHeader}" ColumnDefinitions="*,Auto" Margin="12,0,5,0">
+            <TextBlock Classes="title" Text="Files" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" IsVisible="{Binding HasProject}">
+              <Button Theme="{StaticResource IconButton}" Command="{Binding BeginNewFileCommand}" ToolTip.Tip="New File (Ctrl+N)">
+                <Path Classes="icon" Data="{StaticResource Icon.NewFile}" />
+              </Button>
+              <Button Theme="{StaticResource IconButton}" Command="{Binding BeginNewFolderCommand}" ToolTip.Tip="New Folder">
+                <Path Classes="icon" Data="{StaticResource Icon.NewFolder}" />
+              </Button>
+              <Button Theme="{StaticResource IconButton}" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh">
+                <Path Classes="icon" Data="{StaticResource Icon.Refresh}" />
+              </Button>
+              <Button Theme="{StaticResource IconButton}" Command="{Binding CollapseAllCommand}" ToolTip.Tip="Collapse All">
+                <Path Classes="icon" Data="{StaticResource Icon.CollapseAll}" />
+              </Button>
+            </StackPanel>
+          </Grid>
+
+          <TextBox Name="NewEntryBox" Grid.Row="1" Classes="inline" Margin="8,0,8,6"
+                   Text="{Binding NewEntryName, Mode=TwoWay}" Watermark="{Binding NewEntryHint}"
+                   IsVisible="{Binding IsCreatingEntry}" />
+
+          <TreeView Name="FileTree" Grid.Row="2" Classes="explorer" Margin="5,0,5,6"
+                    ItemsSource="{Binding RootNodes}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
+                    ScrollViewer.HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasProject}">
             <TreeView.ItemTemplate>
               <TreeDataTemplate DataType="vm:FileNodeViewModel" ItemsSource="{Binding Children}">
-                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,3">
-                  <TextBlock Text="{Binding Glyph}" Foreground="#B9986B" />
-                  <TextBlock Text="{Binding Name}" Foreground="#CBD0D9" />
-                </StackPanel>
+                <Grid ColumnDefinitions="14,Auto,*" Background="Transparent" Tapped="OnTreeRowTapped">
+                  <Path Classes="icon chevron" Classes.expanded="{Binding IsExpanded}" Data="{StaticResource Icon.Chevron}"
+                        IsVisible="{Binding IsDirectory}" Width="14" Height="16" HorizontalAlignment="Left"
+                        RenderTransformOrigin="8,8" Margin="-3,0,0,0" />
+                  <Path Grid.Column="1" Classes="icon file" Classes.folder="{Binding IsDirectory}"
+                        Data="{Binding IconKey, Converter={StaticResource FileIcon}}" Margin="0,0,7,0" />
+                  <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </Grid>
               </TreeDataTemplate>
             </TreeView.ItemTemplate>
           </TreeView>
+
+          <StackPanel Grid.Row="2" Margin="12,4,12,0" Spacing="10" IsVisible="{Binding !HasProject}">
+            <TextBlock Classes="muted" Text="No folder open." />
+            <Button Theme="{StaticResource SubtleButton}" Command="{Binding OpenFolderCommand}" Margin="-8,0"
+                    HorizontalAlignment="Stretch">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Path Classes="icon" Data="{StaticResource Icon.OpenFolder}" Margin="0,0,8,0" />
+                <TextBlock Grid.Column="1" Text="Open Folder…" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Classes="kbd" Text="Ctrl+O" />
+              </Grid>
+            </Button>
+          </StackPanel>
         </Grid>
       </Border>
-      <GridSplitter Grid.Column="1" Background="#2A2F37" ResizeDirection="Columns" />
-      <Grid Grid.Column="2" RowDefinitions="*,0">
-        <TabControl ItemsSource="{Binding OpenDocuments}" SelectedItem="{Binding ActiveDocument, Mode=TwoWay}"
-                    Background="#101318" BorderThickness="0">
-          <TabControl.ItemTemplate>
-            <DataTemplate DataType="vm:DocumentViewModel">
-              <TextBlock Text="{Binding TabTitle}" FontSize="12" Margin="10,2" />
-            </DataTemplate>
-          </TabControl.ItemTemplate>
-          <TabControl.ContentTemplate>
-            <DataTemplate DataType="vm:DocumentViewModel">
-              <views:EditorDocumentView />
-            </DataTemplate>
-          </TabControl.ContentTemplate>
-        </TabControl>
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
-                    IsVisible="{Binding !ActiveDocument}" Spacing="12">
-          <TextBlock Text="T" FontSize="62" Foreground="#272C34" FontWeight="Bold" HorizontalAlignment="Center" />
-          <TextBlock Text="Select a file to start editing" FontSize="13" Foreground="#737A88" HorizontalAlignment="Center" />
-        </StackPanel>
+
+      <GridSplitter Name="ExplorerSplitter" Grid.Column="1" Classes="gap" />
+
+      <Grid Name="EditorGrid" Grid.Column="2" ColumnDefinitions="*,Auto,0">
+        <views:EditorPaneView Name="PrimaryPaneView" DataContext="{Binding PrimaryPane}" />
+        <GridSplitter Name="EditorSplitter" Grid.Column="1" Classes="gap" IsVisible="False" />
+        <views:EditorPaneView Name="SecondaryPaneView" Grid.Column="2" DataContext="{Binding SecondaryPane}" IsVisible="False" />
       </Grid>
-      <GridSplitter Grid.Column="3" Background="#2A2F37" ResizeDirection="Columns" />
-      <Border Grid.Column="4" Background="#15181F" BorderBrush="#292D36" BorderThickness="1,0,0,0">
-        <Grid RowDefinitions="48,*">
-          <Border BorderBrush="#2B303A" BorderThickness="0,0,0,1">
-            <TextBlock Text="CHAT" Margin="19,16,0,0" FontSize="11" FontWeight="Bold" Foreground="#BFC3CC" LetterSpacing="1.5" />
-          </Border>
-          <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" Margin="28">
-            <Border Width="52" Height="52" CornerRadius="14" Background="#222831">
-              <TextBlock Text="◇" Foreground="#D6B88A" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
-            <TextBlock Text="Your agents, one workspace" FontSize="14" FontWeight="SemiBold" Foreground="#C9CBD1" HorizontalAlignment="Center" />
-            <TextBlock Text="Agent conversations arrive in stage 2" FontSize="12" Foreground="#7B818B" TextAlignment="Center" TextWrapping="Wrap" />
+
+      <GridSplitter Name="ChatSplitter" Grid.Column="3" Classes="gap" />
+
+      <!-- Reserved for agent chat and orchestration (stage 2). -->
+      <Border Name="ChatPanel" Grid.Column="4" Classes="island">
+        <Grid RowDefinitions="Auto,*">
+          <Grid Height="{DynamicResource Size.PanelHeader}" Margin="12,0,5,0">
+            <TextBlock Classes="title" Text="Chat" />
+          </Grid>
+          <StackPanel Grid.Row="1" Margin="12,4,16,0" Spacing="4">
+            <TextBlock Text="No conversations yet" FontSize="{DynamicResource FontSize.Body}"
+                       Foreground="{DynamicResource Brush.TextSecondary}" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Agent chat and orchestration will live in this panel." />
           </StackPanel>
         </Grid>
       </Border>
     </Grid>
-    <Border Grid.Row="2" Background="#191D25" BorderBrush="#2B3039" BorderThickness="0,1,0,0">
-      <Grid ColumnDefinitions="Auto,*" Margin="14,0">
-        <TextBlock Text="{Binding ProjectTitle}" FontSize="10" Foreground="#C3A57A" VerticalAlignment="Center" Margin="0,0,16,0" />
-        <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="10" Foreground="#818893" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-      </Grid>
-    </Border>
+
+    <!-- Status bar -->
+    <Grid Grid.Row="2" Height="{DynamicResource Size.StatusBar}" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="14,0">
+      <TextBlock Classes="status" Text="{Binding ProjectTitle}" Margin="0,0,14,0" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" Margin="0,0,14,0"
+                  IsVisible="{Binding GitBranch, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <Path Classes="icon" Data="{StaticResource Icon.Branch}" Stroke="{DynamicResource Brush.TextMuted}"
+              VerticalAlignment="Center" RenderTransform="scale(0.8)" />
+        <TextBlock Classes="status" Text="{Binding GitBranch}" />
+      </StackPanel>
+      <TextBlock Grid.Column="2" Classes="status" Text="{Binding Status}" TextTrimming="CharacterEllipsis" Margin="0,0,14,0" />
+      <TextBlock Grid.Column="3" Classes="status" Text="{Binding ActiveFilePath}" TextTrimming="LeadingCharacterEllipsis"
+                 MaxWidth="420" Margin="0,0,16,0" />
+      <TextBlock Grid.Column="4" Classes="status" Text="{Binding ActiveDocument.CaretLabel, FallbackValue={x:Null}}" Margin="0,0,16,0" />
+      <TextBlock Grid.Column="5" Classes="status" Text="{Binding ActiveDocument.Language.DisplayName, FallbackValue={x:Null}}" />
+    </Grid>
   </Grid>
 </Window>

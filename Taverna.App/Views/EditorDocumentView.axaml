@@ -2,10 +2,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:edit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
              x:Class="Taverna.App.Views.EditorDocumentView">
-  <Border Background="#101318">
-    <edit:TextEditor Name="CodeEditor" Background="#101318" Foreground="#D8DAE0"
-                     FontFamily="Consolas,Cascadia Code,Monospace" FontSize="13"
-                     ShowLineNumbers="True" HorizontalScrollBarVisibility="Auto"
-                     VerticalScrollBarVisibility="Auto" />
-  </Border>
+  <edit:TextEditor Name="CodeEditor" Background="Transparent" Foreground="{DynamicResource Brush.Editor.Text}"
+                   FontFamily="{DynamicResource Font.Code}" FontSize="{DynamicResource FontSize.Code}"
+                   LineNumbersForeground="{DynamicResource Brush.Editor.LineNumber}"
+                   ShowLineNumbers="True" Padding="0,6,0,0"
+                   HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
 </UserControl>

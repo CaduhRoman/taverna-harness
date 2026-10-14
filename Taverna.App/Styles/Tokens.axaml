@@ -1,0 +1,76 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Monochrome palette. Islands float over a near-black window, Fleet style. -->
+  <SolidColorBrush x:Key="Brush.Window" Color="#0A0A0B" />
+  <SolidColorBrush x:Key="Brush.Surface" Color="#141415" />
+  <SolidColorBrush x:Key="Brush.Raised" Color="#1F1F21" />
+  <SolidColorBrush x:Key="Brush.Overlay" Color="#1A1A1C" />
+
+  <SolidColorBrush x:Key="Brush.Border" Color="#14FFFFFF" />
+  <SolidColorBrush x:Key="Brush.BorderStrong" Color="#26FFFFFF" />
+  <SolidColorBrush x:Key="Brush.Hover" Color="#0CFFFFFF" />
+  <SolidColorBrush x:Key="Brush.Pressed" Color="#14FFFFFF" />
+  <SolidColorBrush x:Key="Brush.Selected" Color="#12FFFFFF" />
+  <SolidColorBrush x:Key="Brush.SelectedFocus" Color="#21FFFFFF" />
+  <SolidColorBrush x:Key="Brush.Focus" Color="#B3FFFFFF" />
+  <SolidColorBrush x:Key="Brush.SplitterHover" Color="#1AFFFFFF" />
+
+  <SolidColorBrush x:Key="Brush.Text" Color="#E6E6E8" />
+  <SolidColorBrush x:Key="Brush.TextSecondary" Color="#A0A0A5" />
+  <SolidColorBrush x:Key="Brush.TextMuted" Color="#6A6A70" />
+  <SolidColorBrush x:Key="Brush.TextDisabled" Color="#47474C" />
+
+  <SolidColorBrush x:Key="Brush.Icon" Color="#9C9CA2" />
+  <SolidColorBrush x:Key="Brush.IconStrong" Color="#D2D2D6" />
+  <SolidColorBrush x:Key="Brush.IconFolderFill" Color="#1AFFFFFF" />
+
+  <SolidColorBrush x:Key="Brush.Editor.Text" Color="#D4D4D6" />
+  <SolidColorBrush x:Key="Brush.Editor.LineNumber" Color="#4B4B50" />
+  <SolidColorBrush x:Key="Brush.Editor.CurrentLine" Color="#08FFFFFF" />
+  <SolidColorBrush x:Key="Brush.Editor.Selection" Color="#30FFFFFF" />
+  <SolidColorBrush x:Key="Brush.Editor.Caret" Color="#F0F0F0" />
+
+  <!-- Geometry and rhythm -->
+  <CornerRadius x:Key="Radius.Island">8</CornerRadius>
+  <CornerRadius x:Key="Radius.Control">5</CornerRadius>
+  <CornerRadius x:Key="Radius.Row">4</CornerRadius>
+  <x:Double x:Key="Size.TopBar">40</x:Double>
+  <x:Double x:Key="Size.StatusBar">26</x:Double>
+  <x:Double x:Key="Size.PanelHeader">36</x:Double>
+  <x:Double x:Key="Size.TabStrip">38</x:Double>
+  <x:Double x:Key="Size.Row">24</x:Double>
+  <x:Double x:Key="Size.IconButton">26</x:Double>
+  <x:Double x:Key="Size.Gap">6</x:Double>
+
+  <!-- Typography -->
+  <x:Double x:Key="FontSize.Caption">11</x:Double>
+  <x:Double x:Key="FontSize.Body">12</x:Double>
+  <x:Double x:Key="FontSize.Ui">13</x:Double>
+  <x:Double x:Key="FontSize.Code">13</x:Double>
+  <FontFamily x:Key="Font.Code">Cascadia Code,Cascadia Mono,JetBrains Mono,Consolas,DejaVu Sans Mono,Liberation Mono,Noto Sans Mono</FontFamily>
+
+  <!-- Fluent overrides so stock controls (menus, tooltips, inputs) stay monochrome. -->
+  <SolidColorBrush x:Key="ToolTipBackground" Color="#1F1F21" />
+  <SolidColorBrush x:Key="ToolTipForeground" Color="#E6E6E8" />
+  <SolidColorBrush x:Key="ToolTipBorderBrush" Color="#26FFFFFF" />
+  <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#1A1A1C" />
+  <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#26FFFFFF" />
+  <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#14FFFFFF" />
+  <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="#1FFFFFFF" />
+  <SolidColorBrush x:Key="AccentButtonBackground" Color="#E6E6E8" />
+  <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="#C8C8CC" />
+  <SolidColorBrush x:Key="AccentButtonForeground" Color="#0A0A0B" />
+  <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="#0A0A0B" />
+  <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#0A0A0B" />
+  <SolidColorBrush x:Key="TextControlBackground" Color="#0E0E0F" />
+  <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#0E0E0F" />
+  <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#0E0E0F" />
+  <SolidColorBrush x:Key="TextControlBorderBrush" Color="#26FFFFFF" />
+  <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#40FFFFFF" />
+  <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#B3FFFFFF" />
+  <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#55FFFFFF" />
+  <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#6A6A70" />
+  <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#6A6A70" />
+  <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#6A6A70" />
+</ResourceDictionary>

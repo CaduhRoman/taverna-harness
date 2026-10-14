@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Taverna.App.ViewModels"
+             xmlns:views="using:Taverna.App.Views"
+             x:Class="Taverna.App.Views.EditorPaneView"
+             x:DataType="vm:EditorPaneViewModel" x:CompileBindings="True">
+  <Border Classes="island pane" Classes.active="{Binding IsActive}">
+    <Grid RowDefinitions="Auto,Auto,*">
+      <Grid Height="{DynamicResource Size.TabStrip}" ColumnDefinitions="*,Auto">
+        <ListBox Name="TabStrip" ItemsSource="{Binding Documents}" SelectedItem="{Binding ActiveDocument, Mode=TwoWay}"
+                 ItemContainerTheme="{StaticResource EditorTab}" Background="Transparent" BorderThickness="0"
+                 Padding="5,0" VerticalAlignment="Center"
+                 ScrollViewer.HorizontalScrollBarVisibility="Hidden" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="2" />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate DataType="vm:DocumentViewModel">
+              <StackPanel Orientation="Horizontal" Spacing="7" Background="Transparent" ToolTip.Tip="{Binding Path}"
+                          ToolTip.ShowDelay="700">
+                <StackPanel.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="Close" InputGesture="Ctrl+W" Tag="close" Click="OnTabMenuClick" />
+                    <MenuItem Header="Close Others" Tag="others" Click="OnTabMenuClick" />
+                    <MenuItem Header="Close All" Tag="all" Click="OnTabMenuClick" />
+                    <Separator />
+                    <MenuItem Header="Open in Other Split" Tag="split" Click="OnTabMenuClick" />
+                    <MenuItem Header="Move to Other Split" Tag="move" Click="OnTabMenuClick" />
+                  </ContextMenu>
+                </StackPanel.ContextMenu>
+                <Path Classes="icon file" Data="{Binding IconKey, Converter={StaticResource FileIcon}}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Name}" FontSize="{DynamicResource FontSize.Body}" VerticalAlignment="Center"
+                           MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                <Panel Classes="closeslot" Classes.modified="{Binding IsModified}" Width="16" Height="16" VerticalAlignment="Center">
+                  <Ellipse Width="7" Height="7" Fill="{DynamicResource Brush.TextSecondary}" />
+                  <Button Theme="{StaticResource TabCloseButton}" Click="OnTabCloseClick" ToolTip.Tip="Close (Ctrl+W)">
+                    <Path Classes="icon" Data="{StaticResource Icon.Close}" />
+                  </Button>
+                </Panel>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="4,0,6,0" VerticalAlignment="Center">
+          <Button Theme="{StaticResource IconButton}" Command="{Binding SplitCommand}" IsVisible="{Binding CanSplit}"
+                  ToolTip.Tip="Split Right (Ctrl+\)">
+            <Path Classes="icon" Data="{StaticResource Icon.Split}" />
+          </Button>
+          <Button Theme="{StaticResource IconButton}" Command="{Binding CloseSplitCommand}" IsVisible="{Binding !IsPrimary}"
+                  ToolTip.Tip="Close Split">
+            <Path Classes="icon" Data="{StaticResource Icon.Close}" />
+          </Button>
+        </StackPanel>
+      </Grid>
+      <Border Grid.Row="1" Classes="divider" />
+
+      <Panel Grid.Row="2" IsVisible="{Binding ActiveDocument, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <views:EditorDocumentView Name="Editor" DataContext="{Binding ActiveDocument}" />
+      </Panel>
+
+      <!-- Empty state: quiet guidance aligned to the reading line, not a splash screen. -->
+      <StackPanel Grid.Row="2" IsVisible="{Binding ActiveDocument, Converter={x:Static ObjectConverters.IsNull}}"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24,0,24,48" Spacing="14" Width="300">
+        <StackPanel Spacing="4" IsVisible="{Binding !Workspace.HasProject}">
+          <TextBlock Text="No folder open" FontSize="{DynamicResource FontSize.Ui}" Foreground="{DynamicResource Brush.Text}" />
+          <TextBlock Classes="muted" Text="Open a project folder to browse and edit its files." TextWrapping="Wrap" />
+        </StackPanel>
+        <StackPanel Spacing="4" IsVisible="{Binding Workspace.HasProject}">
+          <TextBlock Text="No file open" FontSize="{DynamicResource FontSize.Ui}" Foreground="{DynamicResource Brush.Text}" />
+          <TextBlock Classes="muted" Text="Pick a file in the explorer to start editing." TextWrapping="Wrap" />
+        </StackPanel>
+        <StackPanel Spacing="1" Margin="-8,0">
+          <Button Theme="{StaticResource SubtleButton}" Command="{Binding Workspace.OpenFolderCommand}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Open Folder…" />
+              <TextBlock Grid.Column="1" Classes="kbd" Text="Ctrl+O" />
+            </Grid>
+          </Button>
+          <Button Theme="{StaticResource SubtleButton}" Command="{Binding Workspace.BeginNewFileCommand}"
+                  IsVisible="{Binding Workspace.HasProject}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="New File" />
+              <TextBlock Grid.Column="1" Classes="kbd" Text="Ctrl+N" />
+            </Grid>
+          </Button>
+          <Button Theme="{StaticResource SubtleButton}" Command="{Binding Workspace.ToggleExplorerCommand}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Toggle Explorer" />
+              <TextBlock Grid.Column="1" Classes="kbd" Text="Ctrl+B" />
+            </Grid>
+          </Button>
+        </StackPanel>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>
