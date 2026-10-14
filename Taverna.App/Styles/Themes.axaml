@@ -143,5 +143,8 @@
     <Style Selector="^:pressed">
       <Setter Property="Background" Value="{DynamicResource Brush.Pressed}" />
     </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
   </ControlTheme>
 </ResourceDictionary>

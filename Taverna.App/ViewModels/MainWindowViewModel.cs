@@ -33,6 +33,7 @@ public partial class MainWindowViewModel : ObservableObject
     public EditorPaneViewModel SecondaryPane { get; }
     public IReadOnlyDictionary<AgentKind, IAgentRunner> Runners { get; } = AgentRunnerCatalog.Create();
     public TasksViewModel Tasks { get; }
+    public ChatViewModel Chat { get; }
 
     /// <summary>The opened project. Chat always runs here, even while the explorer shows a worktree.</summary>
     [ObservableProperty]
@@ -101,6 +102,7 @@ public partial class MainWindowViewModel : ObservableObject
         SecondaryPane = new EditorPaneViewModel(this, isPrimary: false);
         activePane = PrimaryPane;
         Tasks = new TasksViewModel(git, Runners, ReportError, confirm, task => _ = BrowseWorktreeAsync(task), CloseDocumentsUnderAsync);
+        Chat = new ChatViewModel(git, Runners, ReportError);
         Tasks.Tasks.CollectionChanged += (_, _) =>
         {
             // A discarded worktree can no longer be shown.
@@ -177,6 +179,8 @@ public partial class MainWindowViewModel : ObservableObject
             ProjectDirectory = directory;
             await RefreshAsync();
             await Tasks.AttachAsync(directory);
+            // The chat is bound to the project root, never to a browsed worktree.
+            await Chat.AttachAsync(directory);
             Status = "";
         }
         catch (Exception ex) { ReportError($"Open folder failed: {ex.Message}"); }
@@ -190,7 +194,11 @@ public partial class MainWindowViewModel : ObservableObject
             $"{active} task(s) are still running. They will be stopped and marked Interrupted.", "Stop");
     }
 
-    public ValueTask ShutdownAsync() => Tasks.DisposeAsync();
+    public async ValueTask ShutdownAsync()
+    {
+        await Chat.DisposeAsync();
+        await Tasks.DisposeAsync();
+    }
 
     /// <summary>Shows a task worktree in the explorer. The project root and the chat are unaffected.</summary>
     public async Task BrowseWorktreeAsync(TaskItemViewModel task)

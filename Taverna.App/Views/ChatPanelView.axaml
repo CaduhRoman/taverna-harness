@@ -1,0 +1,137 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Taverna.App.ViewModels"
+             x:Class="Taverna.App.Views.ChatPanelView"
+             x:DataType="vm:ChatViewModel" x:CompileBindings="True">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- Availability and run state -->
+    <Grid ColumnDefinitions="*,Auto" Margin="12,0,8,6" MinHeight="24">
+      <ItemsControl ItemsSource="{Binding Agents}" VerticalAlignment="Center">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="10" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="vm:ChatAgentViewModel">
+            <StackPanel Orientation="Horizontal" Spacing="5" Background="Transparent" ToolTip.Tip="{Binding AvailabilityText}">
+              <Ellipse Classes="dot" Classes.ready="{Binding IsAvailable}" Classes.unavailable="{Binding !IsAvailable}" VerticalAlignment="Center" />
+              <TextBlock Classes="status" Text="{Binding Name}" />
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsBusy}" VerticalAlignment="Center">
+        <Ellipse Classes="dot working" VerticalAlignment="Center" />
+        <TextBlock Classes="status" Text="{Binding ActivityText}" />
+      </StackPanel>
+    </Grid>
+
+    <!-- Conversation -->
+    <ScrollViewer Name="Scroller" Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="12,0,12,8">
+        <TextBlock Classes="muted" Text="No conversations yet." IsVisible="{Binding IsEmpty}" Margin="0,4" />
+        <ItemsControl ItemsSource="{Binding Messages}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vm:ChatMessageViewModel">
+              <Border Classes="message" Classes.user="{Binding IsUser}">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="status" Text="{Binding Header}" TextTrimming="CharacterEllipsis" />
+                  <SelectableTextBlock Text="{Binding Content}" IsVisible="{Binding HasContent}" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Ui}"
+                                       Foreground="{DynamicResource Brush.Text}" LineHeight="19" />
+                  <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsStreaming}">
+                    <Ellipse Classes="dot working" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <TextBlock Classes="status" Text="{Binding StateText}" IsVisible="{Binding HasStateText}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Composer -->
+    <Border Grid.Row="2" Classes="composer" Margin="8,0,8,8">
+      <StackPanel Spacing="6">
+        <TextBox Name="DraftBox" Classes="composer" Text="{Binding Draft}" Watermark="{Binding Watermark}"
+                 AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="200" IsEnabled="{Binding HasProject}" />
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Button Theme="{StaticResource SubtleButton}" Padding="6,3" ToolTip.Tip="Agent, model and effort"
+                  IsEnabled="{Binding HasProject}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="{Binding PickerLabel}" FontSize="{DynamicResource FontSize.Body}" VerticalAlignment="Center" />
+              <Path Classes="icon" Data="{StaticResource Icon.ChevronDown}" />
+            </StackPanel>
+            <Button.Flyout>
+              <Flyout Placement="TopEdgeAlignedLeft">
+                <StackPanel Width="250" Spacing="4" Margin="2">
+                  <TextBlock Classes="status" Text="Agent" Margin="6,0" />
+                  <ItemsControl ItemsSource="{Binding Agents}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="vm:ChatAgentViewModel">
+                        <Button Theme="{StaticResource SubtleButton}" HorizontalAlignment="Stretch" IsEnabled="{Binding IsAvailable}"
+                                Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).SelectAgentCommand}"
+                                CommandParameter="{Binding}">
+                          <Grid ColumnDefinitions="18,*,Auto">
+                            <Path Classes="icon" Data="{StaticResource Icon.Check}" IsVisible="{Binding IsSelected}" Width="14" />
+                            <TextBlock Grid.Column="1" Text="{Binding Name}" />
+                            <TextBlock Grid.Column="2" Classes="status" Text="{Binding AvailabilityText}" />
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <Border Classes="divider" Margin="0,4" />
+                  <TextBlock Classes="status" Text="Model" Margin="6,0" />
+                  <ItemsControl ItemsSource="{Binding Models}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="vm:ChoiceViewModel">
+                        <Button Theme="{StaticResource SubtleButton}" HorizontalAlignment="Stretch"
+                                Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).SelectModelCommand}"
+                                CommandParameter="{Binding}">
+                          <Grid ColumnDefinitions="18,*">
+                            <Path Classes="icon" Data="{StaticResource Icon.Check}" IsVisible="{Binding IsSelected}" Width="14" />
+                            <TextBlock Grid.Column="1" Text="{Binding Value}" />
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBox Name="CustomModelBox" Classes="inline" Text="{Binding CustomModel}" Watermark="Other model (Enter)" Margin="6,2,6,0" />
+
+                  <StackPanel IsVisible="{Binding SupportsEffort}" Spacing="4">
+                    <Border Classes="divider" Margin="0,4" />
+                    <TextBlock Classes="status" Text="Effort" Margin="6,0" />
+                    <ItemsControl ItemsSource="{Binding Efforts}" Margin="4,0">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:ChoiceViewModel">
+                          <Button Theme="{StaticResource SubtleButton}" Classes="chip" Classes.active="{Binding IsSelected}"
+                                  Content="{Binding Value}"
+                                  Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).SelectEffortCommand}"
+                                  CommandParameter="{Binding}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+            <Button Theme="{StaticResource IconButton}" Classes="primary" Command="{Binding SendCommand}" IsVisible="{Binding IsIdle}"
+                    IsEnabled="{Binding CanSend}" ToolTip.Tip="Send (Enter)">
+              <Path Classes="icon" Data="{StaticResource Icon.Send}" />
+            </Button>
+            <Button Theme="{StaticResource IconButton}" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" ToolTip.Tip="Stop">
+              <Path Classes="icon" Data="{StaticResource Icon.Stop}" />
+            </Button>
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

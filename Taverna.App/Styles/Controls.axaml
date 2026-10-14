@@ -152,6 +152,11 @@
   <Style Selector="Ellipse.dot.ready">
     <Setter Property="Fill" Value="{DynamicResource Brush.TextSecondary}" />
   </Style>
+  <Style Selector="Ellipse.dot.unavailable">
+    <Setter Property="Fill" Value="Transparent" />
+    <Setter Property="Stroke" Value="{DynamicResource Brush.TextMuted}" />
+    <Setter Property="StrokeThickness" Value="1" />
+  </Style>
   <Style Selector="Ellipse.dot.working">
     <Setter Property="Fill" Value="{DynamicResource Brush.Text}" />
     <Style.Animations>
@@ -175,6 +180,57 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
     <Setter Property="Padding" Value="10,5,6,5" />
+  </Style>
+
+  <!-- Chat -->
+  <Style Selector="Border.message">
+    <Setter Property="Padding" Value="0,6" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+  <Style Selector="Border.message.user">
+    <Setter Property="Background" Value="{DynamicResource Brush.Raised}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+    <Setter Property="Padding" Value="10,7" />
+  </Style>
+  <Style Selector="Border.composer">
+    <Setter Property="Background" Value="{DynamicResource Brush.Raised}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Island}" />
+    <Setter Property="Padding" Value="8,6" />
+  </Style>
+  <Style Selector="Border.composer:focus-within">
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}" />
+  </Style>
+  <!-- The composer box is borderless; its card provides the frame. -->
+  <Style Selector="TextBox.composer">
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Ui}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="4,4" />
+    <Setter Property="MinHeight" Value="40" />
+  </Style>
+  <Style Selector="TextBox.composer:pointerover /template/ Border#PART_BorderElement, TextBox.composer:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.chip">
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="Margin" Value="0,0,4,4" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}" />
+  </Style>
+  <Style Selector="Button.chip.active">
+    <Setter Property="Background" Value="{DynamicResource Brush.SelectedFocus}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+  </Style>
+  <Style Selector="FlyoutPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.Overlay}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+    <Setter Property="Padding" Value="4,6" />
   </Style>
 
   <!-- Right panel switcher (Chat | Tasks) -->

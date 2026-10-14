@@ -146,11 +146,8 @@
               </StackPanel>
             </Button>
           </Grid>
-          <Panel Grid.Row="1" Name="ChatHost" IsVisible="{Binding !ShowTasks}">
-            <StackPanel Margin="12,4,16,0" Spacing="4">
-              <TextBlock Classes="muted" Text="No conversations yet." />
-            </StackPanel>
-          </Panel>
+          <views:ChatPanelView Grid.Row="1" Name="ChatView" DataContext="{Binding Chat}"
+                               IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ShowTasks, Converter={x:Static BoolConverters.Not}}" />
           <views:TasksPanelView Grid.Row="1" DataContext="{Binding Tasks}" IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ShowTasks}" />
         </Grid>
       </Border>
