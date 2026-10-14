@@ -23,7 +23,8 @@ public partial class MainWindow : Window
             Title = "Open project folder",
             AllowMultiple = false
         });
-        return folders.FirstOrDefault()?.TryGetLocalPath();
+        var folder = folders.FirstOrDefault();
+        return folder is not null && folder.Path.IsFile ? folder.Path.LocalPath : null;
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)

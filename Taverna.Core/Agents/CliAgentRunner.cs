@@ -48,6 +48,7 @@ public abstract class CliAgentRunner : IAgentRunner
         foreach (var argument in Arguments(prompt, directory)) start.ArgumentList.Add(argument);
 
         using var process = new Process { StartInfo = start };
+        Exception? startError = null;
         try
         {
             ct.ThrowIfCancellationRequested();
@@ -55,7 +56,12 @@ public abstract class CliAgentRunner : IAgentRunner
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            yield return new AgentEvent(AgentEventKind.Error, $"Não foi possível iniciar {Name}: {ex.Message}");
+            startError = ex;
+        }
+
+        if (startError is not null)
+        {
+            yield return new AgentEvent(AgentEventKind.Error, $"Não foi possível iniciar {Name}: {startError.Message}");
             yield break;
         }
 

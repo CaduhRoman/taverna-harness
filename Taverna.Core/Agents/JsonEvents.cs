@@ -26,5 +26,5 @@ internal static class JsonEvents
     }
 
     private static long? Number(JsonElement obj, string key) =>
-        Property(obj, key, out var value) && value.TryGetInt64(out var number) ? number : null;
+        Property(obj, key, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number) ? number : null;
 }

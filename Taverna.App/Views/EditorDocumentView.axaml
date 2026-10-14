@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:edit="clr-namespace:AvaloniaEdit;assembly=Avalonia.AvaloniaEdit"
+             xmlns:edit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
              x:Class="Taverna.App.Views.EditorDocumentView">
   <Border Background="#101318">
     <edit:TextEditor Name="CodeEditor" Background="#101318" Foreground="#D8DAE0"
