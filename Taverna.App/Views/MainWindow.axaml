@@ -1,0 +1,109 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Taverna.App.ViewModels"
+        xmlns:views="using:Taverna.App.Views"
+        x:Class="Taverna.App.Views.MainWindow"
+        Title="Taverna" Width="1440" Height="850" MinWidth="940" MinHeight="550"
+        Background="#0E1014">
+  <Window.Styles>
+    <Style Selector="Button.toolbar">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#B6BAC4" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Padding" Value="9,6" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Button.toolbar:pointerover">
+      <Setter Property="Background" Value="#262B35" />
+    </Style>
+    <Style Selector="TreeViewItem">
+      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+    </Style>
+  </Window.Styles>
+  <Grid RowDefinitions="55,*,26">
+    <Border Grid.Row="0" Background="#171A20" BorderBrush="#2C3039" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="230,*,230" Margin="17,0">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
+          <Border Width="25" Height="25" CornerRadius="5" Background="#E3C18E">
+            <TextBlock Text="T" Foreground="#171A20" FontWeight="Bold" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="TAVERNA" FontWeight="Bold" FontSize="13" Foreground="#F2F0EC" VerticalAlignment="Center" LetterSpacing="1.5" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="5">
+          <Border Background="#353A46" CornerRadius="7" Padding="24,9">
+            <TextBlock Text="Editor" FontSize="13" FontWeight="SemiBold" Foreground="#FFFFFF" />
+          </Border>
+          <Border Padding="24,9" Opacity="0.46">
+            <TextBlock Text="Office · Soon" FontSize="13" Foreground="#CDD0D7" />
+          </Border>
+        </StackPanel>
+        <TextBlock Grid.Column="2" Text="LOCAL WORKSPACE" FontSize="10" Foreground="#707785" HorizontalAlignment="Right" VerticalAlignment="Center" LetterSpacing="1.2" />
+      </Grid>
+    </Border>
+    <Grid Grid.Row="1" ColumnDefinitions="246,4,*,4,320">
+      <Border Grid.Column="0" Background="#14171D" BorderBrush="#292D36" BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="42,43,*">
+          <TextBlock Text="FILES" FontSize="11" FontWeight="Bold" Foreground="#BFC3CC" LetterSpacing="1.5" Margin="16,15,0,0" />
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="1" Margin="7,0" VerticalAlignment="Center">
+            <Button Classes="toolbar" Content="Open Folder" Command="{Binding OpenFolderCommand}" />
+            <Button Classes="toolbar" Content="↻" ToolTip.Tip="Refresh" Command="{Binding RefreshCommand}" />
+            <Button Classes="toolbar" Content="⊟" ToolTip.Tip="Collapse All" Command="{Binding CollapseAllCommand}" />
+          </StackPanel>
+          <TreeView Grid.Row="2" ItemsSource="{Binding RootNodes}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
+                    Background="Transparent" BorderThickness="0" Margin="7,2,5,8" FontSize="12">
+            <TreeView.ItemTemplate>
+              <TreeDataTemplate DataType="vm:FileNodeViewModel" ItemsSource="{Binding Children}">
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,3">
+                  <TextBlock Text="{Binding Glyph}" Foreground="#B9986B" />
+                  <TextBlock Text="{Binding Name}" Foreground="#CBD0D9" />
+                </StackPanel>
+              </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+        </Grid>
+      </Border>
+      <GridSplitter Grid.Column="1" Background="#2A2F37" ResizeDirection="Columns" />
+      <Grid Grid.Column="2" RowDefinitions="*,0">
+        <TabControl ItemsSource="{Binding OpenDocuments}" SelectedItem="{Binding ActiveDocument, Mode=TwoWay}"
+                    Background="#101318" BorderThickness="0">
+          <TabControl.ItemTemplate>
+            <DataTemplate DataType="vm:DocumentViewModel">
+              <TextBlock Text="{Binding TabTitle}" FontSize="12" Margin="10,2" />
+            </DataTemplate>
+          </TabControl.ItemTemplate>
+          <TabControl.ContentTemplate>
+            <DataTemplate DataType="vm:DocumentViewModel">
+              <views:EditorDocumentView />
+            </DataTemplate>
+          </TabControl.ContentTemplate>
+        </TabControl>
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
+                    IsVisible="{Binding !ActiveDocument}" Spacing="12">
+          <TextBlock Text="T" FontSize="62" Foreground="#272C34" FontWeight="Bold" HorizontalAlignment="Center" />
+          <TextBlock Text="Select a file to start editing" FontSize="13" Foreground="#737A88" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Grid>
+      <GridSplitter Grid.Column="3" Background="#2A2F37" ResizeDirection="Columns" />
+      <Border Grid.Column="4" Background="#15181F" BorderBrush="#292D36" BorderThickness="1,0,0,0">
+        <Grid RowDefinitions="48,*">
+          <Border BorderBrush="#2B303A" BorderThickness="0,0,0,1">
+            <TextBlock Text="CHAT" Margin="19,16,0,0" FontSize="11" FontWeight="Bold" Foreground="#BFC3CC" LetterSpacing="1.5" />
+          </Border>
+          <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" Margin="28">
+            <Border Width="52" Height="52" CornerRadius="14" Background="#222831">
+              <TextBlock Text="◇" Foreground="#D6B88A" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="Your agents, one workspace" FontSize="14" FontWeight="SemiBold" Foreground="#C9CBD1" HorizontalAlignment="Center" />
+            <TextBlock Text="Agent conversations arrive in stage 2" FontSize="12" Foreground="#7B818B" TextAlignment="Center" TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Grid>
+    <Border Grid.Row="2" Background="#191D25" BorderBrush="#2B3039" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="Auto,*" Margin="14,0">
+        <TextBlock Text="{Binding ProjectTitle}" FontSize="10" Foreground="#C3A57A" VerticalAlignment="Center" Margin="0,0,16,0" />
+        <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="10" Foreground="#818893" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
