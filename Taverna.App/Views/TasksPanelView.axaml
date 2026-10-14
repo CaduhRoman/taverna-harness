@@ -1,0 +1,133 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Taverna.App.ViewModels"
+             x:Class="Taverna.App.Views.TasksPanelView"
+             xmlns:git="using:Taverna.Core.Git"
+             x:DataType="vm:TasksViewModel" x:CompileBindings="True">
+  <Grid RowDefinitions="Auto,Auto,*">
+    <!-- Toolbar -->
+    <Grid ColumnDefinitions="*,Auto" Margin="12,2,8,6">
+      <TextBlock Classes="muted" VerticalAlignment="Center"
+                 Text="{Binding ActiveCount, StringFormat='{}{0} running · max 3'}" />
+      <Button Grid.Column="1" Theme="{StaticResource SubtleButton}" Command="{Binding BeginCreateCommand}"
+              IsEnabled="{Binding HasProject}" ToolTip.Tip="New Task">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Path Classes="icon" Data="{StaticResource Icon.Plus}" />
+          <TextBlock Text="New Task" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+    </Grid>
+
+    <!-- New Task form -->
+    <Border Grid.Row="1" Classes="card" IsVisible="{Binding IsCreating}" Margin="8,0,8,8">
+      <StackPanel Spacing="8">
+        <TextBox Classes="inline" Text="{Binding NewTitle}" Watermark="Title" MaxLength="80" />
+        <Grid ColumnDefinitions="*,6,*,6,Auto">
+          <ComboBox ItemsSource="{Binding AgentOptions}" SelectedItem="{Binding NewAgent}" HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate DataType="vm:AgentOptionViewModel">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Classes="muted" Text="{Binding AvailabilityText}" IsVisible="{Binding !IsAvailable}" />
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <ComboBox Grid.Column="2" IsEditable="True" Text="{Binding NewModel}" ItemsSource="{Binding NewModels}" HorizontalAlignment="Stretch"
+                    PlaceholderText="Model" ToolTip.Tip="Model (type any name)" />
+          <ComboBox Grid.Column="4" ItemsSource="{Binding NewEfforts}" SelectedItem="{Binding NewEffort}"
+                    IsVisible="{Binding NewAgentSupportsEffort}" ToolTip.Tip="Effort" MinWidth="90" />
+        </Grid>
+        <TextBox Classes="inline" Text="{Binding NewPrompt}" Watermark="Prompt" AcceptsReturn="True"
+                 TextWrapping="Wrap" MinHeight="90" MaxHeight="220" />
+        <TextBlock Classes="muted" Text="{Binding NewAgentHint}" TextWrapping="Wrap"
+                   IsVisible="{Binding NewAgentHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
+          <Button Content="Cancel" Command="{Binding CancelCreateCommand}" />
+          <Button Content="Start" Classes="accent" Command="{Binding CreateCommand}" IsEnabled="{Binding !IsStarting}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- Task list -->
+    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="6,0,6,8">
+        <TextBlock Classes="muted" Margin="6,6" Text="No tasks yet." IsVisible="{Binding HasNoTasks}" />
+        <ItemsControl ItemsSource="{Binding Tasks}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vm:TaskItemViewModel">
+              <StackPanel Margin="0,0,0,2">
+                <Button Theme="{StaticResource SubtleButton}" HorizontalAlignment="Stretch" Padding="8,6"
+                        Command="{Binding $parent[UserControl].((vm:TasksViewModel)DataContext).ToggleExpandCommand}"
+                        CommandParameter="{Binding}">
+                  <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+                    <Ellipse Classes="dot" Classes.working="{Binding IsWorking}" Classes.error="{Binding IsErrorState}"
+                             Classes.done="{Binding IsDoneState}" Margin="0,0,9,0" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Classes="status" Margin="8,0,0,0"
+                               Text="{Binding StatusText}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="status" Text="{Binding Meta}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="1" Grid.Column="2" Classes="status" Margin="8,0,0,0" Text="{Binding DurationText}" />
+                  </Grid>
+                </Button>
+
+                <Border Classes="card" Margin="2,2,2,8" IsVisible="{Binding IsExpanded}">
+                  <StackPanel Spacing="8">
+                    <TextBlock Classes="body" Text="{Binding Detail}" TextWrapping="Wrap" IsVisible="{Binding HasDetail}" />
+                    <ItemsControl ItemsSource="{Binding ConflictFiles}" IsVisible="{Binding HasConflict}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <TextBlock Classes="kbd" Text="{Binding}" Foreground="{DynamicResource Brush.Text}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" Classes="meta">
+                      <TextBlock Classes="status" Text="Base" />
+                      <TextBlock Grid.Column="1" Classes="kbd" Text="{Binding BaseCommit}" Margin="10,0,0,0" />
+                      <TextBlock Grid.Row="1" Classes="status" Text="Tokens" />
+                      <TextBlock Grid.Row="1" Grid.Column="1" Classes="status" Text="{Binding TokensText}" Margin="10,0,0,0" />
+                      <TextBlock Grid.Row="2" Classes="status" Text="Files" />
+                      <TextBlock Grid.Row="2" Grid.Column="1" Classes="status" Text="{Binding FilesText}" Margin="10,0,0,0" />
+                    </Grid>
+
+                    <ItemsControl ItemsSource="{Binding ChangedFiles}" IsVisible="{Binding HasChangedFiles}" MaxHeight="140">
+                      <ItemsControl.Template>
+                        <ControlTemplate>
+                          <ScrollViewer><ItemsPresenter /></ScrollViewer>
+                        </ControlTemplate>
+                      </ItemsControl.Template>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="git:GitFileChange">
+                          <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Classes="kbd" Text="{Binding Status}" Width="18" />
+                            <TextBlock Classes="kbd" Text="{Binding Path}" Foreground="{DynamicResource Brush.TextSecondary}"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <WrapPanel Orientation="Horizontal">
+                      <Button Content="Open" Margin="0,0,6,0" IsEnabled="{Binding CanOpen}" ToolTip.Tip="Show the worktree in the explorer"
+                              Command="{Binding $parent[UserControl].((vm:TasksViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}" />
+                      <Button Content="Merge" Margin="0,0,6,0" IsEnabled="{Binding CanMerge}"
+                              Command="{Binding $parent[UserControl].((vm:TasksViewModel)DataContext).MergeCommand}" CommandParameter="{Binding}" />
+                      <Button Content="Discard" Margin="0,0,6,0" IsEnabled="{Binding CanDiscard}"
+                              Command="{Binding $parent[UserControl].((vm:TasksViewModel)DataContext).DiscardCommand}" CommandParameter="{Binding}" />
+                      <Button Content="Cancel" IsVisible="{Binding IsWorking}" IsEnabled="{Binding CanCancel}"
+                              Command="{Binding $parent[UserControl].((vm:TasksViewModel)DataContext).CancelTaskCommand}" CommandParameter="{Binding}" />
+                    </WrapPanel>
+
+                    <TextBox Classes="log" Text="{Binding Log}" IsReadOnly="True" TextWrapping="Wrap"
+                             Height="200" TextChanged="OnLogChanged" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

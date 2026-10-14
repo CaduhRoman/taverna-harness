@@ -25,7 +25,7 @@ public partial class MainWindow : Window
     public MainWindow(string? initialFolder)
     {
         InitializeComponent();
-        viewModel = new MainWindowViewModel(PickFolderAsync, ConfirmUnsavedAsync)
+        viewModel = new MainWindowViewModel(PickFolderAsync, ConfirmUnsavedAsync, ConfirmAsync)
         {
             IsExplorerVisible = layout.ExplorerVisible,
             IsChatVisible = layout.ChatVisible
@@ -80,6 +80,9 @@ public partial class MainWindow : Window
 
     private async Task<UnsavedChoice> ConfirmUnsavedAsync(DocumentViewModel document) =>
         await new UnsavedChangesDialog(document.Name).ShowDialog<UnsavedChoice?>(this) ?? UnsavedChoice.Cancel;
+
+    private async Task<bool> ConfirmAsync(string heading, string message, string confirmLabel) =>
+        await new ConfirmDialog(heading, message, confirmLabel).ShowDialog<bool?>(this) == true;
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -184,13 +187,16 @@ public partial class MainWindow : Window
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (closeConfirmed || !viewModel.HasUnsavedChanges)
+        if (closeConfirmed)
         {
             SaveLayout();
             return;
         }
         e.Cancel = true;
-        if (!await viewModel.ConfirmExitAsync()) return;
+        if (!await viewModel.ConfirmStopTasksAsync()) return;
+        if (viewModel.HasUnsavedChanges && !await viewModel.ConfirmExitAsync()) return;
+        // Agent processes must not outlive the window; stopped tasks are recorded as Interrupted.
+        await viewModel.ShutdownAsync();
         closeConfirmed = true;
         Dispatcher.UIThread.Post(Close);
     }

@@ -8,7 +8,7 @@ public sealed record GitRepository(string RootPath, string Branch, string ShortC
 public sealed record ManagedWorktree(string RepositoryRoot, string Directory, string Branch, string BaseCommit, string TargetBranch);
 public sealed record GitFileChange(string Path, string Status);
 public sealed record GitComparison(string Patch, IReadOnlyList<GitFileChange> Changes);
-public sealed record GitMergeResult(bool Merged, bool HadConflicts, IReadOnlyList<string> ConflictPaths);
+public sealed record GitMergeResult(bool Merged, bool HadConflicts, IReadOnlyList<string> ConflictPaths, string? Message = null);
 
 public sealed class GitService
 {
@@ -34,7 +34,44 @@ public sealed class GitService
             string.IsNullOrWhiteSpace(branch) ? "(detached)" : branch, commit);
     }
 
-    public async Task<ManagedWorktree> CreateWorktreeAsync(string directory, string agentName, CancellationToken ct = default)
+    public Task<ManagedWorktree> CreateWorktreeAsync(string directory, string agentName, CancellationToken ct = default)
+    {
+        var label = Slugify(agentName, "agent", 32);
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        return CreateWorktreeCoreAsync(directory, _ => Task.FromResult($"taverna/{label}-{suffix}"), $"{label}-{suffix}", ct);
+    }
+
+    /// <summary>
+    /// Creates a worktree on branch agent/&lt;agent&gt;/&lt;slug&gt; from the current branch, appending -2, -3...
+    /// when that branch already exists.
+    /// </summary>
+    public Task<ManagedWorktree> CreateTaskWorktreeAsync(string directory, string agentSlug, string title, CancellationToken ct = default)
+    {
+        var agent = Slugify(agentSlug, "agent", 16);
+        var slug = Slugify(title, "task", 40);
+        return CreateWorktreeCoreAsync(directory, async root =>
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                var name = attempt == 1 ? $"agent/{agent}/{slug}" : $"agent/{agent}/{slug}-{attempt}";
+                var exists = await GitProcess.RunAsync(root, ct, "rev-parse", "--verify", "--quiet", $"refs/heads/{name}");
+                if (exists.ExitCode != 0) return name;
+            }
+        }, $"{agent}-{slug}-{Guid.NewGuid().ToString("N")[..6]}", ct);
+    }
+
+    public static string Slugify(string text, string fallback, int maxLength)
+    {
+        var slug = new string(text.ToLowerInvariant().Select(c =>
+            (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ? c : '-').ToArray());
+        while (slug.Contains("--")) slug = slug.Replace("--", "-");
+        slug = slug.Trim('-');
+        if (slug.Length > maxLength) slug = slug[..maxLength].TrimEnd('-');
+        return slug.Length == 0 ? fallback : slug;
+    }
+
+    private async Task<ManagedWorktree> CreateWorktreeCoreAsync(string directory, Func<string, Task<string>> branchName,
+        string folderName, CancellationToken ct)
     {
         var repository = await DetectRepositoryAsync(directory, ct)
             ?? throw new GitCommandException("A pasta não pertence a um repositório Git com commit inicial.");
@@ -48,14 +85,9 @@ public sealed class GitService
             var baseCommit = await RequiredAsync(repository.RootPath, ct, "rev-parse", "HEAD");
             if (branch.Length == 0) throw new InvalidOperationException("HEAD destacado.");
 
-            var label = new string(agentName.ToLowerInvariant().Select(c =>
-                (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ? c : '-').ToArray()).Trim('-');
-            if (label.Length == 0) label = "agent";
-            if (label.Length > 32) label = label[..32];
-            var suffix = Guid.NewGuid().ToString("N")[..12];
-            var name = $"taverna/{label}-{suffix}";
+            var name = await branchName(repository.RootPath);
             var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(repository.RootPath)))[..16];
-            var path = Path.Combine(worktreeStorageRoot, digest, $"{label}-{suffix}");
+            var path = Path.Combine(worktreeStorageRoot, digest, folderName);
             if (Path.GetFullPath(path).StartsWith(repository.RootPath + Path.DirectorySeparatorChar,
                 OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                 throw new InvalidOperationException("O caminho gerenciado precisa ficar fora do projeto Git.");
@@ -71,7 +103,8 @@ public sealed class GitService
         CancellationToken ct = default)
     {
         ValidateWorktree(worktree);
-        var result = await GitProcess.RunAsync(worktree.Directory, ct, "status", "--porcelain=v1", "-z");
+        // List untracked files individually instead of collapsing new folders.
+        var result = await GitProcess.RunAsync(worktree.Directory, ct, "status", "--porcelain=v1", "-z", "--untracked-files=all");
         result.ThrowIfFailed("status");
         return ParseStatus(result.Output);
     }
@@ -104,7 +137,9 @@ public sealed class GitService
             if (branch != worktree.TargetBranch)
                 throw new InvalidOperationException("Branch principal mudou; merge interrompido para proteger o usuário.");
 
-            var status = await RequiredAsync(worktree.RepositoryRoot, ct, "status", "--porcelain=v1");
+            // Tracked edits block the merge outright. Untracked files are left to Git, which refuses to
+            // overwrite them before touching anything (handled below as a non-conflict failure).
+            var status = await RequiredAsync(worktree.RepositoryRoot, ct, "status", "--porcelain=v1", "--untracked-files=no");
             if (!string.IsNullOrWhiteSpace(status))
                 throw new InvalidOperationException("Worktree principal possui alterações locais; merge interrompido sem modificar arquivos.");
 
@@ -123,6 +158,12 @@ public sealed class GitService
             var merge = await GitProcess.RunAsync(worktree.RepositoryRoot, ct,
                 "merge", "--no-ff", "--no-edit", worktree.Branch);
             if (merge.ExitCode == 0) return new GitMergeResult(true, false, []);
+
+            // Git can refuse before starting (e.g. an untracked file would be overwritten): nothing to abort.
+            var inProgress = await GitProcess.RunAsync(worktree.RepositoryRoot, CancellationToken.None,
+                "rev-parse", "-q", "--verify", "MERGE_HEAD");
+            if (inProgress.ExitCode != 0)
+                return new GitMergeResult(false, false, [], $"Git recusou o merge: {(merge.Error + " " + merge.Output).Trim()}");
 
             var conflicts = await GitProcess.RunAsync(worktree.RepositoryRoot, CancellationToken.None,
                 "diff", "--name-only", "--diff-filter=U");
@@ -148,6 +189,41 @@ public sealed class GitService
             // -d protects commits that have not been merged into the current branch.
             (await GitProcess.RunAsync(worktree.RepositoryRoot, ct, "branch", "-d", worktree.Branch))
                 .ThrowIfFailed("branch delete (branch preservada para recuperação se ainda não foi incorporada)");
+        }, ct);
+    }
+
+    /// <summary>
+    /// True when discarding would lose work: uncommitted edits in the worktree, or commits on its
+    /// branch that the repository's current HEAD does not contain.
+    /// </summary>
+    public async Task<bool> HasUnmergedWorkAsync(ManagedWorktree worktree, CancellationToken ct = default)
+    {
+        if (Directory.Exists(worktree.Directory) && (await GetChangedFilesAsync(worktree, ct)).Count > 0) return true;
+        var branchExists = await GitProcess.RunAsync(worktree.RepositoryRoot, ct, "rev-parse", "--verify", "--quiet", $"refs/heads/{worktree.Branch}");
+        if (branchExists.ExitCode != 0) return false;
+        var ahead = await RequiredAsync(worktree.RepositoryRoot, ct, "rev-list", "--count", $"HEAD..refs/heads/{worktree.Branch}");
+        return int.TryParse(ahead, out var count) && count > 0;
+    }
+
+    /// <summary>
+    /// Removes the worktree and its branch after the user explicitly confirmed losing unmerged work.
+    /// Never call this without that confirmation; <see cref="RemoveWorktreeAsync"/> is the safe default.
+    /// </summary>
+    public async Task DiscardWorktreeAsync(ManagedWorktree worktree, CancellationToken ct = default)
+    {
+        if (!Directory.Exists(worktree.RepositoryRoot)) throw new DirectoryNotFoundException(worktree.RepositoryRoot);
+        await SerializedAsync(worktree.RepositoryRoot, async () =>
+        {
+            if (Directory.Exists(worktree.Directory))
+                (await GitProcess.RunAsync(worktree.RepositoryRoot, ct, "worktree", "remove", "--force", worktree.Directory))
+                    .ThrowIfFailed("worktree remove");
+            else
+                // The folder vanished outside Taverna; drop Git's stale registration.
+                (await GitProcess.RunAsync(worktree.RepositoryRoot, ct, "worktree", "prune")).ThrowIfFailed("worktree prune");
+
+            var branchExists = await GitProcess.RunAsync(worktree.RepositoryRoot, ct, "rev-parse", "--verify", "--quiet", $"refs/heads/{worktree.Branch}");
+            if (branchExists.ExitCode == 0)
+                (await GitProcess.RunAsync(worktree.RepositoryRoot, ct, "branch", "-D", worktree.Branch)).ThrowIfFailed("branch delete");
         }, ct);
     }
 

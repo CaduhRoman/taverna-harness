@@ -15,14 +15,17 @@ internal static class JsonEvents
         return false;
     }
 
-    public static TokenUsage? Tokens(JsonElement root)
+    /// <summary>Reads a top-level "usage" object.</summary>
+    public static TokenUsage? Tokens(JsonElement root) => Property(root, "usage", out var usage) ? Usage(usage) : null;
+
+    /// <summary>Reads Anthropic/OpenAI style usage counters from the usage object itself.</summary>
+    public static TokenUsage? Usage(JsonElement usage)
     {
-        if (!Property(root, "usage", out var usage)) return null;
-        var input = Number(usage, "input_tokens");
-        var output = Number(usage, "output_tokens");
+        var input = Number(usage, "input_tokens") ?? Number(usage, "prompt_tokens");
+        var output = Number(usage, "output_tokens") ?? Number(usage, "completion_tokens");
         if (input is null || output is null) return null;
-        return new TokenUsage(input.Value, output.Value, Number(usage, "cached_input_tokens") ??
-            Number(usage, "cache_read_input_tokens"));
+        return new TokenUsage(input.Value, output.Value,
+            Number(usage, "cached_input_tokens") ?? Number(usage, "cache_read_input_tokens"));
     }
 
     private static long? Number(JsonElement obj, string key) =>

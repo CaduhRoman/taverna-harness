@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Taverna.Core.Agents;
 using Taverna.Core.Git;
 using Taverna.Core.Projects;
 
@@ -15,21 +16,44 @@ public partial class MainWindowViewModel : ObservableObject
 
     private readonly Func<Task<string?>> pickFolder;
     private readonly Func<DocumentViewModel, Task<UnsavedChoice>> confirmUnsaved;
+    private readonly Func<string, string, string, Task<bool>> confirm;
     private readonly ProjectFiles files = new();
     private readonly GitIgnoreService gitIgnore = new();
-    private readonly GitService git = new();
+    // Worktrees live outside the project so they never show up in its tree or `git status`.
+    private readonly GitService git = new(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Taverna", "worktrees"));
     private readonly TerminalLauncher terminals = new();
     private readonly Dictionary<string, FileNodeViewModel> nodesByPath = new(PathComparer);
     private bool creatingDirectory;
     private string? createParent;
+    private CancellationTokenSource? errorTimeout;
 
     public ObservableCollection<FileNodeViewModel> RootNodes { get; } = new();
     public EditorPaneViewModel PrimaryPane { get; }
     public EditorPaneViewModel SecondaryPane { get; }
+    public IReadOnlyDictionary<AgentKind, IAgentRunner> Runners { get; } = AgentRunnerCatalog.Create();
+    public TasksViewModel Tasks { get; }
 
+    /// <summary>The opened project. Chat always runs here, even while the explorer shows a worktree.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ProjectTitle), nameof(HasProject), nameof(WindowTitle), nameof(ActiveFilePath))]
+    [NotifyPropertyChangedFor(nameof(ProjectTitle), nameof(HasProject), nameof(WindowTitle), nameof(ActiveFilePath), nameof(ExplorerRoot))]
     private string? projectDirectory;
+
+    /// <summary>Set while the explorer shows a task worktree instead of the project.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExplorerRoot), nameof(IsBrowsingWorktree), nameof(WindowTitle), nameof(ActiveFilePath))]
+    private TaskItemViewModel? browsedTask;
+
+    [ObservableProperty] private string? errorMessage;
+
+    /// <summary>The right panel shows either the chat or the task list.</summary>
+    [ObservableProperty] private bool showTasks;
+
+    [RelayCommand] private void ShowChatPanel() => ShowTasks = false;
+    [RelayCommand] private void ShowTasksPanel() => ShowTasks = true;
+
+    public string? ExplorerRoot => BrowsedTask?.WorktreePath ?? ProjectDirectory;
+    public bool IsBrowsingWorktree => BrowsedTask is not null;
 
     [ObservableProperty] private EditorPaneViewModel activePane;
     [ObservableProperty] private bool isSplit;
@@ -49,22 +73,62 @@ public partial class MainWindowViewModel : ObservableObject
         ? "No folder open"
         : Path.GetFileName(Path.TrimEndingDirectorySeparator(ProjectDirectory));
 
-    public string? ActiveFilePath => ActiveDocument is null ? null
-        : ProjectDirectory is null ? ActiveDocument.Path
-        : Path.GetRelativePath(ProjectDirectory, ActiveDocument.Path);
+    /// <summary>Worktree files are labelled with their branch so they are never mistaken for project files.</summary>
+    public string? ActiveFilePath => ActiveDocument?.Path is not { } path ? null
+        : BrowsedTask is { } task && IsUnder(path, task.WorktreePath) ? $"{task.Branch} · {Path.GetRelativePath(task.WorktreePath, path)}"
+        : ProjectDirectory is not null && IsUnder(path, ProjectDirectory) ? Path.GetRelativePath(ProjectDirectory, path)
+        : path;
 
-    public string WindowTitle => ActiveDocument is not null ? $"{ActiveDocument.Name} — {ProjectTitle} — Taverna"
-        : HasProject ? $"{ProjectTitle} — Taverna" : "Taverna";
+    public string WindowTitle
+    {
+        get
+        {
+            var place = BrowsedTask is { } task ? $"{ProjectTitle} [{task.Branch}]" : ProjectTitle;
+            return ActiveDocument is not null ? $"{ActiveDocument.Name} — {place} — Taverna"
+                : HasProject ? $"{place} — Taverna" : "Taverna";
+        }
+    }
 
     private IEnumerable<DocumentViewModel> AllDocuments => PrimaryPane.Documents.Concat(SecondaryPane.Documents).Distinct();
 
-    public MainWindowViewModel(Func<Task<string?>> pickFolder, Func<DocumentViewModel, Task<UnsavedChoice>> confirmUnsaved)
+    public MainWindowViewModel(Func<Task<string?>> pickFolder, Func<DocumentViewModel, Task<UnsavedChoice>> confirmUnsaved,
+        Func<string, string, string, Task<bool>> confirm)
     {
         this.pickFolder = pickFolder;
         this.confirmUnsaved = confirmUnsaved;
+        this.confirm = confirm;
         PrimaryPane = new EditorPaneViewModel(this, isPrimary: true) { IsActive = true };
         SecondaryPane = new EditorPaneViewModel(this, isPrimary: false);
         activePane = PrimaryPane;
+        Tasks = new TasksViewModel(git, Runners, ReportError, confirm, task => _ = BrowseWorktreeAsync(task), CloseDocumentsUnderAsync);
+        Tasks.Tasks.CollectionChanged += (_, _) =>
+        {
+            // A discarded worktree can no longer be shown.
+            if (BrowsedTask is { } browsed && !Tasks.Tasks.Contains(browsed)) _ = ReturnToProjectAsync();
+        };
+    }
+
+    // ---------- Errors ----------
+
+    /// <summary>Shows a one-line error in the bar at the bottom of the window; it clears itself.</summary>
+    public void ReportError(string message)
+    {
+        ErrorMessage = message.ReplaceLineEndings(" ");
+        errorTimeout?.Cancel();
+        var timeout = errorTimeout = new CancellationTokenSource();
+        _ = Task.Delay(TimeSpan.FromSeconds(12), timeout.Token).ContinueWith(_ =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (errorTimeout == timeout) ErrorMessage = null; }),
+            TaskContinuationOptions.OnlyOnRanToCompletion);
+    }
+
+    [RelayCommand]
+    private void DismissError() => ErrorMessage = null;
+
+    private static bool IsUnder(string path, string root)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        return path.StartsWith(normalized + Path.DirectorySeparatorChar, comparison);
     }
 
     partial void OnActivePaneChanged(EditorPaneViewModel? oldValue, EditorPaneViewModel newValue)
@@ -99,6 +163,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     public async Task OpenProjectAsync(string directory)
     {
+        if (!await ConfirmStopTasksAsync()) return;
         if (!await ResolveUnsavedAsync(AllDocuments.ToList())) return;
 
         try
@@ -108,17 +173,52 @@ public partial class MainWindowViewModel : ObservableObject
             IsCreatingEntry = false;
             nodesByPath.Clear();
             SelectedNode = null;
+            BrowsedTask = null;
             ProjectDirectory = directory;
             await RefreshAsync();
+            await Tasks.AttachAsync(directory);
             Status = "";
         }
-        catch (Exception ex) { Status = $"Open folder failed: {ex.Message}"; }
+        catch (Exception ex) { ReportError($"Open folder failed: {ex.Message}"); }
+    }
+
+    /// <summary>Running tasks belong to the current project; leaving it stops them (recorded as Interrupted).</summary>
+    public async Task<bool> ConfirmStopTasksAsync()
+    {
+        var active = Tasks.ActiveCount;
+        return active == 0 || await confirm("Stop running tasks?",
+            $"{active} task(s) are still running. They will be stopped and marked Interrupted.", "Stop");
+    }
+
+    public ValueTask ShutdownAsync() => Tasks.DisposeAsync();
+
+    /// <summary>Shows a task worktree in the explorer. The project root and the chat are unaffected.</summary>
+    public async Task BrowseWorktreeAsync(TaskItemViewModel task)
+    {
+        if (!Directory.Exists(task.WorktreePath)) { ReportError("The worktree folder no longer exists."); return; }
+        BrowsedTask = task;
+        nodesByPath.Clear();
+        SelectedNode = null;
+        IsCreatingEntry = false;
+        IsExplorerVisible = true;
+        await RefreshAsync();
+    }
+
+    [RelayCommand]
+    private async Task ReturnToProjectAsync()
+    {
+        if (BrowsedTask is null) return;
+        BrowsedTask = null;
+        nodesByPath.Clear();
+        SelectedNode = null;
+        IsCreatingEntry = false;
+        await RefreshAsync();
     }
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        var directory = ProjectDirectory;
+        var directory = ExplorerRoot;
         if (directory is null) return;
         try
         {
@@ -134,7 +234,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             GitBranch = await DetectBranchAsync(directory);
         }
-        catch (Exception ex) { Status = $"Refresh failed: {ex.Message}"; }
+        catch (Exception ex) { ReportError($"Refresh failed: {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -156,16 +256,16 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void BeginCreate(bool directory)
     {
-        if (ProjectDirectory is null) return;
+        if (ExplorerRoot is not { } root) return;
         createParent = SelectedNode switch
         {
             { IsDirectory: true } folder => folder.FullPath,
             { } file => Path.GetDirectoryName(file.FullPath),
-            null => ProjectDirectory
-        } ?? ProjectDirectory;
+            null => root
+        } ?? root;
         creatingDirectory = directory;
-        var relative = Path.GetRelativePath(ProjectDirectory, createParent);
-        var location = relative == "." ? ProjectTitle : relative;
+        var relative = Path.GetRelativePath(root, createParent);
+        var location = relative == "." ? (BrowsedTask?.Branch ?? ProjectTitle) : relative;
         NewEntryHint = directory ? $"New folder in {location}" : $"New file in {location}";
         NewEntryName = "";
         IsCreatingEntry = true;
@@ -174,13 +274,13 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task CommitNewEntryAsync()
     {
-        if (!IsCreatingEntry || ProjectDirectory is null || createParent is null) return;
+        if (!IsCreatingEntry || ExplorerRoot is not { } root || createParent is null) return;
         if (string.IsNullOrWhiteSpace(NewEntryName)) { CancelNewEntry(); return; }
         try
         {
             var path = creatingDirectory
-                ? files.CreateDirectory(ProjectDirectory, createParent, NewEntryName)
-                : files.CreateFile(ProjectDirectory, createParent, NewEntryName);
+                ? files.CreateDirectory(root, createParent, NewEntryName)
+                : files.CreateFile(root, createParent, NewEntryName);
             IsCreatingEntry = false;
             if (nodesByPath.TryGetValue(createParent, out var parent)) parent.IsExpanded = true;
             await RefreshAsync();
@@ -195,7 +295,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex) when (ex is ArgumentException or IOException or InvalidOperationException or UnauthorizedAccessException)
         {
             // Keep the input open so the name can be corrected.
-            Status = ex.Message;
+            ReportError(ex.Message);
         }
     }
 
@@ -210,7 +310,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (ProjectDirectory is null) return;
         try { terminals.Open(ProjectDirectory); }
-        catch (Exception ex) { Status = $"Terminal failed: {ex.Message}"; }
+        catch (Exception ex) { ReportError($"Terminal failed: {ex.Message}"); }
     }
 
     // ---------- Documents ----------
@@ -222,11 +322,11 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             var text = await File.ReadAllTextAsync(path);
-            if (text.Contains('\0')) { Status = "Binary files cannot be opened in the text editor."; return; }
+            if (text.Contains('\0')) { ReportError("Binary files cannot be opened in the text editor."); return; }
             ActivePane.Open(new DocumentViewModel(path, text));
             Status = "";
         }
-        catch (Exception ex) { Status = $"Open file failed: {ex.Message}"; }
+        catch (Exception ex) { ReportError($"Open file failed: {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -253,7 +353,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Status = $"Save failed: {ex.Message}";
+            ReportError($"Save failed: {ex.Message}");
             return false;
         }
     }
@@ -303,7 +403,7 @@ public partial class MainWindowViewModel : ObservableObject
     private void SplitEditor()
     {
         var document = ActiveDocument;
-        if (document is null) { Status = "Open a file to split the editor."; return; }
+        if (document is null) { ReportError("Open a file to split the editor."); return; }
         var target = Other(ActivePane);
         IsSplit = true;
         target.Open(document);
@@ -330,6 +430,20 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand] private void ToggleChat() => IsChatVisible = !IsChatVisible;
 
     public bool HasUnsavedChanges => AllDocuments.Any(d => d.IsModified);
+
+    /// <summary>Closes every open file inside <paramref name="root"/> (e.g. a worktree about to be deleted). False if the user cancelled.</summary>
+    public async Task<bool> CloseDocumentsUnderAsync(string root)
+    {
+        var affected = AllDocuments.Where(d => IsUnder(d.Path, root)).ToList();
+        if (!await ResolveUnsavedAsync(affected)) return false;
+        foreach (var document in affected)
+        {
+            PrimaryPane.Remove(document);
+            SecondaryPane.Remove(document);
+        }
+        NormalizeSplit();
+        return true;
+    }
 
     public Task<bool> ConfirmExitAsync() => ResolveUnsavedAsync(AllDocuments.ToList());
 

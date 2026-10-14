@@ -128,6 +128,68 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
 
+  <!-- Inset surface for forms and expanded task details. -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource Brush.Raised}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+    <Setter Property="Padding" Value="10" />
+  </Style>
+
+  <!-- Status dots: solid = done, hollow = error/conflict, pulsing = working. -->
+  <Style Selector="Ellipse.dot">
+    <Setter Property="Width" Value="7" />
+    <Setter Property="Height" Value="7" />
+    <Setter Property="Fill" Value="{DynamicResource Brush.TextMuted}" />
+  </Style>
+  <Style Selector="Ellipse.dot.done">
+    <Setter Property="Fill" Value="{DynamicResource Brush.TextSecondary}" />
+  </Style>
+  <Style Selector="Ellipse.dot.error">
+    <Setter Property="Fill" Value="Transparent" />
+    <Setter Property="Stroke" Value="{DynamicResource Brush.Text}" />
+    <Setter Property="StrokeThickness" Value="1.4" />
+  </Style>
+  <Style Selector="Ellipse.dot.ready">
+    <Setter Property="Fill" Value="{DynamicResource Brush.TextSecondary}" />
+  </Style>
+  <Style Selector="Ellipse.dot.working">
+    <Setter Property="Fill" Value="{DynamicResource Brush.Text}" />
+    <Style.Animations>
+      <Animation Duration="0:0:1.2" IterationCount="Infinite" PlaybackDirection="Alternate">
+        <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <Style Selector="TextBox.log">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Code}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Caption}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}" />
+    <Setter Property="Padding" Value="8,6" />
+  </Style>
+
+  <Style Selector="Border.errorbar">
+    <Setter Property="Background" Value="{DynamicResource Brush.Raised}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+    <Setter Property="Padding" Value="10,5,6,5" />
+  </Style>
+
+  <!-- Right panel switcher (Chat | Tasks) -->
+  <Style Selector="Button.paneltab">
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.paneltab.active">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+    <Setter Property="Background" Value="{DynamicResource Brush.Raised}" />
+  </Style>
+
   <!-- An unfocused split keeps its current tab visible, but quieter. -->
   <Style Selector="Border.pane:not(.active) ListBoxItem:selected">
     <Setter Property="Background" Value="{DynamicResource Brush.Selected}" />

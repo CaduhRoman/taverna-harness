@@ -2,13 +2,38 @@ using System.Text.Json;
 
 namespace Taverna.Core.Agents;
 
+/// <summary>
+/// Codex CLI (`codex exec --json`). The prompt is read from stdin via `-`; images use the documented
+/// `--image` flag. Codex emits whole agent messages, not token deltas.
+/// </summary>
 public sealed class CodexAgentRunner : CliAgentRunner
 {
-    public override string Name => "Codex CLI";
+    private static readonly AgentCapabilities Caps = new(
+        Models: [],
+        Efforts: ["minimal", "low", "medium", "high", "xhigh"],
+        SupportsImages: true);
+
+    public override AgentKind Kind => AgentKind.Codex;
+    public override string Name => "Codex";
+    public override AgentCapabilities Capabilities => Caps;
     protected override string Command => "codex";
 
-    protected override IReadOnlyList<string> Arguments(string prompt, string workingDirectory) =>
-        ["exec", "--json", "--sandbox", "workspace-write", "-C", workingDirectory, prompt];
+    protected override IReadOnlyList<string> Arguments(AgentRequest request, string workingDirectory)
+    {
+        var args = new List<string>
+        {
+            "exec", "--json", "--skip-git-repo-check",
+            "--sandbox", request.Mode == AgentRunMode.Summary ? "read-only" : "workspace-write",
+            "-C", workingDirectory
+        };
+        if (request.Model is { } model) args.AddRange(["-m", model]);
+        if (request.Effort is { } effort) args.AddRange(["-c", $"model_reasoning_effort=\"{effort}\""]);
+        foreach (var image in request.Images) args.AddRange(["--image", image]);
+        args.Add("-");
+        return args;
+    }
+
+    protected override string StandardInput(AgentRequest request) => request.Prompt;
 
     protected override IEnumerable<AgentEvent> ParseStdout(string line, object state)
     {
@@ -16,34 +41,29 @@ public sealed class CodexAgentRunner : CliAgentRunner
         var root = doc.RootElement;
         var type = JsonEvents.String(root, "type");
 
-        if (type == "item.completed" && JsonEvents.Property(root, "item", out var item) &&
-            JsonEvents.String(item, "type") == "agent_message")
+        if (type == "item.completed" && JsonEvents.Property(root, "item", out var item))
         {
-            var text = JsonEvents.String(item, "text");
-            if (!string.IsNullOrEmpty(text)) yield return new AgentEvent(AgentEventKind.Text, text);
+            var itemType = JsonEvents.String(item, "type");
+            if (itemType == "agent_message" && JsonEvents.String(item, "text") is { Length: > 0 } text)
+                yield return new AgentEvent(AgentEventKind.Text, text);
+            else if (itemType is "command_execution" or "file_change")
+                yield return new AgentEvent(AgentEventKind.Status, $"Codex: {itemType}");
         }
         else if (type == "turn.completed")
         {
-            if (JsonEvents.Property(root, "usage", out var usageRoot) &&
-                JsonEvents.Tokens(WrapUsage(usageRoot)) is { } tokens)
+            if (JsonEvents.Property(root, "usage", out var usage) && JsonEvents.Usage(usage) is { } tokens)
                 yield return new AgentEvent(AgentEventKind.Tokens, Usage: tokens);
-            yield return new AgentEvent(AgentEventKind.Status, "Codex: turno concluído");
+            yield return new AgentEvent(AgentEventKind.Status, "Codex: turn completed");
         }
         else if (type is "thread.started" or "turn.started")
             yield return new AgentEvent(AgentEventKind.Status, $"Codex: {type}");
-        else if (type is "error" or "turn.failed")
+        else if (type == "error")
+            // Codex reports transient reconnects as "error" too; the exit code decides the outcome.
+            yield return new AgentEvent(AgentEventKind.Log, JsonEvents.String(root, "message") ?? line);
+        else if (type == "turn.failed")
         {
-            var message = JsonEvents.String(root, "message");
-            if (message is null && JsonEvents.Property(root, "error", out var error))
-                message = JsonEvents.String(error, "message");
-            yield return new AgentEvent(AgentEventKind.Error, message ?? "Codex retornou erro.");
+            var message = JsonEvents.Property(root, "error", out var error) ? JsonEvents.String(error, "message") : null;
+            yield return new AgentEvent(AgentEventKind.Error, message ?? "Codex turn failed.");
         }
-    }
-
-    private static JsonElement WrapUsage(JsonElement usage)
-    {
-        // JsonEvents expects a top-level usage property; the Codex event nests it at turn.completed.usage.
-        using var wrapper = JsonDocument.Parse("{\"usage\":" + usage.GetRawText() + "}");
-        return wrapper.RootElement.Clone();
     }
 }

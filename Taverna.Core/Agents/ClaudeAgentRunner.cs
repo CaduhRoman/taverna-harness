@@ -1,17 +1,68 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Taverna.Core.Agents;
 
+/// <summary>
+/// Claude Code in print mode. The prompt and any images go through stdin as one stream-json user
+/// message; image content blocks were verified against claude 2.1.296.
+/// </summary>
 public sealed class ClaudeAgentRunner : CliAgentRunner
 {
-    public override string Name => "Claude Code";
+    private static readonly AgentCapabilities Caps = new(
+        Models: ["fable", "opus", "sonnet", "haiku"],
+        Efforts: ["low", "medium", "high", "xhigh", "max"],
+        SupportsImages: true);
+
+    public override AgentKind Kind => AgentKind.Claude;
+    public override string Name => "Claude";
+    public override AgentCapabilities Capabilities => Caps;
     protected override string Command => "claude";
 
-    protected override IReadOnlyList<string> Arguments(string prompt, string workingDirectory) =>
-    [
-        "--print", "--output-format", "stream-json", "--include-partial-messages",
-        "--verbose", "--restricted", "--permission-mode", "dontAsk", "--", prompt
-    ];
+    protected override IReadOnlyList<string> Arguments(AgentRequest request, string workingDirectory)
+    {
+        var args = new List<string>
+        {
+            "--print", "--input-format", "stream-json", "--output-format", "stream-json",
+            "--include-partial-messages", "--verbose", "--no-session-persistence",
+            // No command-running tools; file edits are auto-approved but confined to the working directory.
+            "--restricted",
+            "--permission-mode", request.Mode == AgentRunMode.Summary ? "dontAsk" : "acceptEdits"
+        };
+        if (request.Model is { } model) args.AddRange(["--model", model]);
+        if (request.Effort is { } effort) args.AddRange(["--effort", effort]);
+        return args;
+    }
+
+    protected override string StandardInput(AgentRequest request)
+    {
+        var content = new JsonArray { new JsonObject { ["type"] = "text", ["text"] = request.Prompt } };
+        foreach (var image in request.Images)
+            content.Add(new JsonObject
+            {
+                ["type"] = "image",
+                ["source"] = new JsonObject
+                {
+                    ["type"] = "base64",
+                    ["media_type"] = MediaType(image),
+                    ["data"] = Convert.ToBase64String(File.ReadAllBytes(image))
+                }
+            });
+        var message = new JsonObject
+        {
+            ["type"] = "user",
+            ["message"] = new JsonObject { ["role"] = "user", ["content"] = content }
+        };
+        return message.ToJsonString() + "\n";
+    }
+
+    private static string MediaType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".gif" => "image/gif",
+        ".webp" => "image/webp",
+        _ => "image/png"
+    };
 
     protected override object NewParseState() => new State();
 
@@ -42,18 +93,22 @@ public sealed class ClaudeAgentRunner : CliAgentRunner
                 if (!string.IsNullOrEmpty(text)) yield return new AgentEvent(AgentEventKind.Text, text);
             }
         }
+        else if (type == "assistant" && JsonEvents.Property(root, "message", out var toolMessage) &&
+                 JsonEvents.Property(toolMessage, "content", out var toolBlocks) && toolBlocks.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var block in toolBlocks.EnumerateArray())
+                if (JsonEvents.String(block, "type") == "tool_use")
+                    yield return new AgentEvent(AgentEventKind.Status, $"Tool: {JsonEvents.String(block, "name")}");
+        }
         else if (type == "result")
         {
             if (JsonEvents.Property(root, "is_error", out var isError) && isError.ValueKind == JsonValueKind.True)
-                yield return new AgentEvent(AgentEventKind.Error, JsonEvents.String(root, "result") ?? "Claude retornou erro.");
+                yield return new AgentEvent(AgentEventKind.Error, JsonEvents.String(root, "result") ?? "Claude reported an error.");
             if (JsonEvents.Tokens(root) is { } tokens)
                 yield return new AgentEvent(AgentEventKind.Tokens, Usage: tokens);
         }
-        else if (type == "system")
-        {
-            var subtype = JsonEvents.String(root, "subtype");
-            if (subtype == "init") yield return new AgentEvent(AgentEventKind.Status, "Claude: sessão iniciada");
-        }
+        else if (type == "system" && JsonEvents.String(root, "subtype") == "init")
+            yield return new AgentEvent(AgentEventKind.Status, $"Session started ({JsonEvents.String(root, "model")})");
     }
 
     private sealed class State { public bool SeenTextDelta { get; set; } }

@@ -1,20 +1,29 @@
-using System.Runtime.CompilerServices;
-
 namespace Taverna.Core.Agents;
 
-public sealed class CopilotAgentRunner : IAgentRunner
+/// <summary>
+/// GitHub Copilot CLI in programmatic mode (`copilot -p`), following its public documentation.
+/// UNVERIFIED: the CLI was not installed where this was written, so flags and plain-text output
+/// could not be checked. Images are disabled until an input mechanism is confirmed.
+/// </summary>
+public sealed class CopilotAgentRunner : CliAgentRunner
 {
-    public string Name => "GitHub Copilot CLI";
-    public bool IsInstalled() => CliLocator.Find("copilot") is not null;
+    private static readonly AgentCapabilities Caps = new(Models: [], Efforts: [], SupportsImages: false);
 
-    public async IAsyncEnumerable<AgentEvent> RunAsync(
-        string prompt, string workingDirectory, [EnumeratorCancellation] CancellationToken ct = default)
+    public override AgentKind Kind => AgentKind.Copilot;
+    public override string Name => "Copilot";
+    public override AgentCapabilities Capabilities => Caps;
+    protected override string Command => "copilot";
+    protected override bool PromptInArguments => true;
+
+    protected override IReadOnlyList<string> Arguments(AgentRequest request, string workingDirectory)
     {
-        // The executable is absent in the validation environment. No unverified invocation flags are used.
-        await Task.CompletedTask;
-        ct.ThrowIfCancellationRequested();
-        yield return new AgentEvent(AgentEventKind.Error,
-            IsInstalled() ? "Copilot instalado, mas modo não interativo e isolamento ainda não validados nesta máquina."
-                          : "GitHub Copilot CLI não está instalada; execução indisponível até validação local de --help.");
+        var args = new List<string> { "-p", request.Prompt, "--no-color" };
+        // File writes only; shell commands stay denied in every mode.
+        if (request.Mode != AgentRunMode.Summary) args.AddRange(["--allow-tool", "write"]);
+        if (request.Model is { } model) args.AddRange(["--model", model]);
+        return args;
     }
+
+    protected override IEnumerable<AgentEvent> ParseStdout(string line, object state) =>
+        [new AgentEvent(AgentEventKind.Text, line + "\n")];
 }
