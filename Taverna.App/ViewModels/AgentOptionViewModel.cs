@@ -19,6 +19,17 @@ public sealed class AgentOptionViewModel(IAgentRunner runner)
     public IReadOnlyList<string> Models => [DefaultChoice, .. Runner.Capabilities.Models];
     public IReadOnlyList<string> Efforts => [DefaultChoice, .. Runner.Capabilities.Efforts];
 
+    /// <summary>Efforts the chosen model accepts; models without catalog data get the full list.</summary>
+    public IReadOnlyList<string> EffortsFor(string? model) =>
+        Runner.Capabilities.EffortsFor(Normalize(model)) is { } known ? [DefaultChoice, .. known] : Efforts;
+
+    /// <summary>Display name from the CLI catalog ("Opus 5.5"), or the id itself.</summary>
+    public string Label(string model) => Runner.Capabilities.Label(model);
+
+    public IReadOnlyList<ChoiceViewModel> ModelChoices => Models.Select(model => new ChoiceViewModel(model, Label(model))).ToList();
+    public string ValidEffort(string? model, string? effort) => EffortsFor(model).Contains(effort)
+        ? effort! : DefaultChoice;
+
     public void RefreshAvailability() => IsAvailable = Runner.IsAvailable();
 
     public static string? Normalize(string? choice) =>

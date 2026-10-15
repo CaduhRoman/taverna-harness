@@ -9,6 +9,46 @@ namespace Taverna.Core.Tests;
 
 public sealed class TaskOrchestratorTests
 {
+    [Fact]
+    public async Task Queue_PersistsWithoutRunning_ThenStartsSameTaskWithChosenModelAndEffort()
+    {
+        using var repo = await TemporaryGitRepository.CreateAsync();
+        var runner = new ScriptedRunner(AgentKind.Codex, (_, _) => ScriptedRunner.Reply("ok"), images: true);
+        await using var orchestrator = Create(repo, runner);
+        var queued = await orchestrator.EnqueueAsync(new TaskRequest("Later", AgentKind.Codex, "prompt")
+        { Model = "test-model", Effort = "high", Attachments = [".taverna/attachments/context.png"] });
+        Assert.Empty(runner.Requests);
+        Assert.Equal(0, orchestrator.ActiveCount);
+        Assert.Empty(queued.WorktreePath);
+        Assert.Equal(AgentTaskStatus.Queued, (await new TaskStore(repo.Root).LoadAsync()).Single().Status);
+        var started = await orchestrator.StartQueuedAsync(queued.Id);
+        await orchestrator.WaitAsync(started.Id);
+        Assert.Equal(queued.Id, started.Id);
+        Assert.Single(orchestrator.Tasks);
+        Assert.Equal("test-model", runner.Requests.Single().Model);
+        Assert.Equal("high", runner.Requests.Single().Effort);
+        Assert.Equal(Path.GetFullPath(Path.Combine(repo.Root, ".taverna/attachments/context.png")), runner.Requests.Single().Images.Single());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => orchestrator.StartQueuedAsync(queued.Id));
+    }
+
+    [Fact]
+    public async Task QueuedTasks_DoNotBypassAgentLimit_AndCanBeDiscarded()
+    {
+        using var repo = await TemporaryGitRepository.CreateAsync();
+        var gate = new TaskCompletionSource();
+        var runner = new ScriptedRunner(AgentKind.Claude, (_, ct) => ScriptedRunner.UntilCancelled(gate, ct));
+        await using var orchestrator = Create(repo, runner);
+        var running = await orchestrator.StartAsync(new TaskRequest("Now", AgentKind.Claude, "p"));
+        await gate.Task;
+        var queued = await orchestrator.EnqueueAsync(new TaskRequest("Later", AgentKind.Claude, "p"));
+        await Assert.ThrowsAsync<TaskLimitException>(() => orchestrator.StartQueuedAsync(queued.Id));
+        Assert.Equal(AgentTaskStatus.Queued, orchestrator.Tasks.Single(t => t.Id == queued.Id).Status);
+        await orchestrator.DiscardAsync(queued.Id, false);
+        Assert.Single(orchestrator.Tasks);
+        orchestrator.Cancel(running.Id);
+        await orchestrator.WaitAsync(running.Id);
+    }
+
     private static Dictionary<AgentKind, IAgentRunner> Runners(params ScriptedRunner[] runners) =>
         runners.ToDictionary(r => r.Kind, r => (IAgentRunner)r);
 

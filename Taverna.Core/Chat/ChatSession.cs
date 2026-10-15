@@ -8,6 +8,7 @@ public sealed record ChatSendRequest(string Text, AgentKind Agent)
 {
     public string? Model { get; init; }
     public string? Effort { get; init; }
+    public AgentPermissionMode? PermissionMode { get; init; }
     /// <summary>Paths relative to the project root (see <see cref="AttachmentStore"/>).</summary>
     public IReadOnlyList<string> Attachments { get; init; } = [];
 }
@@ -77,6 +78,8 @@ public sealed class ChatSession : IAsyncDisposable
             throw new InvalidOperationException($"{AgentNames.Display(request.Agent)} is not available.");
         if (request.Attachments.Count > 0 && !runner.Capabilities.SupportsImages)
             throw new InvalidOperationException($"{AgentNames.Display(request.Agent)} does not accept image attachments.");
+        if (AgentPermissions.Validate(request.Agent, request.PermissionMode) is { } permissionError)
+            throw new InvalidOperationException(permissionError);
 
         var cancel = new CancellationTokenSource();
         lock (sync)
@@ -130,7 +133,9 @@ public sealed class ChatSession : IAsyncDisposable
             await SaveAsync();
 
             ActivityChanged?.Invoke("Preparing");
-            var built = await context.BuildAsync(previous, user.Content, user.Attachments, cache, ct);
+            // Plan must not indirectly start a CLI summarizer with development tools.
+            var builder = request.PermissionMode == AgentPermissionMode.Plan ? new ContextBuilder(context.Options) : context;
+            var built = await builder.BuildAsync(previous, user.Content, user.Attachments, cache, ct);
             if (built.Summary is not null && built.Summary != cache)
                 lock (sync) history.Summary = built.Summary;
 
@@ -147,6 +152,7 @@ public sealed class ChatSession : IAsyncDisposable
             {
                 Model = request.Model,
                 Effort = request.Effort,
+                PermissionMode = request.PermissionMode,
                 Images = request.Attachments.Select(a => Path.GetFullPath(Path.Combine(projectRoot, a))).ToList(),
                 Mode = AgentRunMode.Chat
             };

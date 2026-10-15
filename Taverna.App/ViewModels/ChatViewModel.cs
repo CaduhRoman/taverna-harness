@@ -19,6 +19,13 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
     private readonly Dictionary<AgentKind, (string Model, string Effort)> choices = [];
     private ChatSession? session;
     private string? projectRoot;
+    private readonly PermissionPreferences permissionPreferences;
+    private readonly Dictionary<AgentKind, AgentPermissionMode> permissionChoices;
+    public ObservableCollection<PermissionChoiceViewModel> Permissions { get; } = new();
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PermissionLabel), nameof(CanSend))]
+    private AgentPermissionMode? selectedPermission;
+    public string PermissionLabel => SelectedPermission?.ToString() ?? "Mode";
 
     public ObservableCollection<ChatMessageViewModel> Messages { get; } = new();
     /// <summary>Images attached to the draft, already copied into .taverna/attachments/.</summary>
@@ -68,7 +75,7 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Shown when the draft holds images the selected agent cannot receive.</summary>
     public bool AttachmentsBlocked => HasPendingAttachments && !SelectedAgent.Option.SupportsImages;
 
-    public bool CanSend => HasProject && !IsBusy && SelectedAgent.IsAvailable && !AttachmentsBlocked &&
+    public bool CanSend => HasProject && !IsBusy && SelectedAgent.IsAvailable && !AttachmentsBlocked && SelectedPermission is not null &&
                            (!string.IsNullOrWhiteSpace(Draft) || HasPendingAttachments);
 
     /// <summary>"Claude · opus · high", omitting defaults.</summary>
@@ -77,24 +84,27 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
         get
         {
             var parts = new List<string> { SelectedAgent.Name };
-            if (SelectedModel != AgentOptionViewModel.DefaultChoice) parts.Add(SelectedModel);
+            if (SelectedModel != AgentOptionViewModel.DefaultChoice) parts.Add(SelectedAgent.Option.Label(SelectedModel));
             if (SupportsEffort && SelectedEffort != AgentOptionViewModel.DefaultChoice) parts.Add(SelectedEffort);
             return string.Join(" · ", parts);
         }
     }
 
     public ChatViewModel(GitService git, IReadOnlyDictionary<AgentKind, IAgentRunner> runners, Action<string> reportError,
-        Func<Task<string?>> pickImage)
+        Func<Task<string?>> pickImage, PermissionPreferences? permissionPreferences = null)
     {
         this.pickImage = pickImage;
         this.git = git;
         this.runners = runners;
         this.reportError = reportError;
+        this.permissionPreferences = permissionPreferences ?? new(PermissionPreferences.DefaultPath);
+        permissionChoices = this.permissionPreferences.Load();
         Agents = new[] { AgentKind.Claude, AgentKind.Codex, AgentKind.Copilot, AgentKind.ExternalApi }
             .Select(kind => new ChatAgentViewModel(new AgentOptionViewModel(runners[kind]))).ToList();
         selectedAgent = Agents.FirstOrDefault(a => a.IsAvailable) ?? Agents[0];
         selectedAgent.IsSelected = true;
         RebuildChoices();
+        RebuildPermissions();
         Messages.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsEmpty));
         PendingAttachments.CollectionChanged += (_, _) => NotifyAttachments();
     }
@@ -211,6 +221,34 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
         (SelectedModel, SelectedEffort) = choices.TryGetValue(agent.Option.Kind, out var saved)
             ? saved : (AgentOptionViewModel.DefaultChoice, AgentOptionViewModel.DefaultChoice);
         RebuildChoices();
+        RebuildPermissions();
+    }
+
+    /// <summary>Without a saved choice: Auto where the agent supports it, otherwise its only safe mode.</summary>
+    private static AgentPermissionMode? DefaultPermission(AgentKind kind) =>
+        AgentPermissions.Supports(kind, AgentPermissionMode.Auto) ? AgentPermissionMode.Auto
+        : AgentPermissions.Supports(kind, AgentPermissionMode.Plan) ? AgentPermissionMode.Plan : null;
+
+    private void RebuildPermissions()
+    {
+        var kind = SelectedAgent.Option.Kind;
+        SelectedPermission = permissionChoices.TryGetValue(kind, out var saved) && AgentPermissions.Supports(kind, saved)
+            ? saved : DefaultPermission(kind);
+        Permissions.Clear();
+        foreach (var option in AgentPermissions.For(kind))
+            Permissions.Add(new PermissionChoiceViewModel(option) { IsSelected = option.Mode == SelectedPermission });
+    }
+
+    [RelayCommand]
+    private async Task SelectPermissionAsync(PermissionChoiceViewModel? choice)
+    {
+        if (IsBusy || choice is null || !AgentPermissions.Supports(SelectedAgent.Option.Kind, choice.Mode)) return;
+        SelectedPermission = choice.Mode;
+        permissionChoices[SelectedAgent.Option.Kind] = choice.Mode;
+        foreach (var item in Permissions) item.IsSelected = item.Mode == choice.Mode;
+        try { await permissionPreferences.SaveAsync(new Dictionary<AgentKind, AgentPermissionMode>(permissionChoices)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { reportError($"Could not save permission preference: {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -220,6 +258,7 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
         SelectedModel = choice.Value;
         CustomModel = "";
         MarkSelected(Models, choice.Value);
+        RebuildEfforts();
     }
 
     [RelayCommand]
@@ -230,6 +269,7 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
         if (!AgentCapabilities.IsSafeToken(model)) { reportError($"Invalid model name: {model}"); return; }
         SelectedModel = model;
         MarkSelected(Models, model);
+        RebuildEfforts();
     }
 
     [RelayCommand]
@@ -248,6 +288,7 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
         {
             Model = AgentOptionViewModel.Normalize(SelectedModel),
             Effort = SupportsEffort ? AgentOptionViewModel.Normalize(SelectedEffort) : null,
+            PermissionMode = SelectedPermission,
             Attachments = PendingAttachments.Select(a => a.RelativePath).ToList()
         };
         Task sending;
@@ -319,13 +360,21 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
     private void RebuildChoices()
     {
         Models.Clear();
-        foreach (var model in SelectedAgent.Option.Models) Models.Add(new ChoiceViewModel(model));
+        foreach (var model in SelectedAgent.Option.ModelChoices) Models.Add(model);
         if (!SelectedAgent.Option.Models.Contains(SelectedModel)) Models.Add(new ChoiceViewModel(SelectedModel));
         MarkSelected(Models, SelectedModel);
-        Efforts.Clear();
-        foreach (var effort in SelectedAgent.Option.Efforts) Efforts.Add(new ChoiceViewModel(effort));
-        MarkSelected(Efforts, SelectedEffort);
+        RebuildEfforts();
         OnPropertyChanged(nameof(PickerLabel));
+    }
+
+    /// <summary>Only the efforts the selected model accepts; an effort it rejects falls back to Default.</summary>
+    private void RebuildEfforts()
+    {
+        var efforts = SelectedAgent.Option.EffortsFor(SelectedModel);
+        SelectedEffort = SelectedAgent.Option.ValidEffort(SelectedModel, SelectedEffort);
+        Efforts.Clear();
+        foreach (var effort in efforts) Efforts.Add(new ChoiceViewModel(effort));
+        MarkSelected(Efforts, SelectedEffort);
     }
 
     private static void MarkSelected(IEnumerable<ChoiceViewModel> items, string value)

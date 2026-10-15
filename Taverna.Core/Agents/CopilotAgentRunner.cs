@@ -18,8 +18,10 @@ public sealed class CopilotAgentRunner : CliAgentRunner
     protected override IReadOnlyList<string> Arguments(AgentRequest request, string workingDirectory)
     {
         var args = new List<string> { "-p", request.Prompt, "--no-color" };
-        // File writes only; shell commands stay denied in every mode.
-        if (request.Mode != AgentRunMode.Summary) args.AddRange(["--allow-tool", "write"]);
+        // Auto grants development tools, retaining path/URL checks and explicit deny rules.
+        if (request.Mode == AgentRunMode.Chat && request.PermissionMode == AgentPermissionMode.Auto)
+            args.AddRange(["--allow-tool", "read,write,shell"]);
+        else if (request.Mode != AgentRunMode.Summary) args.AddRange(["--allow-tool", "write"]);
         if (request.Model is { } model) args.AddRange(["--model", model]);
         return args;
     }

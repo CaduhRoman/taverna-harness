@@ -4,9 +4,34 @@
              x:Class="Taverna.App.Views.TasksPanelView"
              xmlns:git="using:Taverna.Core.Git"
              x:DataType="vm:TasksViewModel" x:CompileBindings="True">
+  <UserControl.Styles>
+    <!-- Form controls follow the app rhythm: 26px rows, control radius, body text. -->
+    <Style Selector="Grid.taskForm TextBlock.label">
+      <Setter Property="FontSize" Value="{DynamicResource FontSize.Caption}" />
+      <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}" />
+    </Style>
+    <Style Selector="Grid.taskForm ComboBox">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="8,3,0,3" />
+      <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+    </Style>
+    <Style Selector="Grid.taskForm CheckBox">
+      <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+      <Setter Property="MinHeight" Value="26" />
+    </Style>
+    <Style Selector="Button.formAction">
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="12,4" />
+      <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
   <Grid RowDefinitions="Auto,Auto,*">
     <!-- Toolbar -->
-    <Grid ColumnDefinitions="*,Auto" Margin="12,2,8,6">
+    <Grid ColumnDefinitions="*,Auto" Margin="12,2,8,6" IsVisible="{Binding !IsCreating}">
       <TextBlock Classes="muted" VerticalAlignment="Center"
                  Text="{Binding ActiveCount, StringFormat='{}{0} running · max 3'}" />
       <Button Grid.Column="1" Theme="{StaticResource SubtleButton}" Command="{Binding BeginCreateCommand}"
@@ -18,39 +43,113 @@
       </Button>
     </Grid>
 
-    <!-- New Task form -->
-    <Border Grid.Row="1" Classes="card" IsVisible="{Binding IsCreating}" Margin="8,0,8,8">
-      <StackPanel Spacing="8">
-        <TextBox Classes="inline" Text="{Binding NewTitle}" Watermark="Title" MaxLength="80" />
-        <Grid ColumnDefinitions="*,6,*,6,Auto">
-          <ComboBox ItemsSource="{Binding AgentOptions}" SelectedItem="{Binding NewAgent}" HorizontalAlignment="Stretch">
-            <ComboBox.ItemTemplate>
-              <DataTemplate DataType="vm:AgentOptionViewModel">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="{Binding Name}" />
-                  <TextBlock Classes="muted" Text="{Binding AvailabilityText}" IsVisible="{Binding !IsAvailable}" />
-                </StackPanel>
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-          <ComboBox Grid.Column="2" IsEditable="True" Text="{Binding NewModel}" ItemsSource="{Binding NewModels}" HorizontalAlignment="Stretch"
-                    PlaceholderText="Model" ToolTip.Tip="Model (type any name)" />
-          <ComboBox Grid.Column="4" ItemsSource="{Binding NewEfforts}" SelectedItem="{Binding NewEffort}"
-                    IsVisible="{Binding NewAgentSupportsEffort}" ToolTip.Tip="Effort" MinWidth="90" />
-        </Grid>
-        <TextBox Classes="inline" Text="{Binding NewPrompt}" Watermark="Prompt" AcceptsReturn="True"
-                 TextWrapping="Wrap" MinHeight="90" MaxHeight="220" />
-        <TextBlock Classes="muted" Text="{Binding NewAgentHint}" TextWrapping="Wrap"
-                   IsVisible="{Binding NewAgentHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
-          <Button Content="Cancel" Command="{Binding CancelCreateCommand}" />
-          <Button Content="Start" Classes="accent" Command="{Binding CreateCommand}" IsEnabled="{Binding !IsStarting}" />
-        </StackPanel>
-      </StackPanel>
-    </Border>
+    <!-- New Task form: fills the popover while open. -->
+    <Grid Classes="taskForm" Grid.RowSpan="3" IsVisible="{Binding IsCreating}" RowDefinitions="Auto,Auto,*,Auto,Auto">
+      <Grid Height="{DynamicResource Size.PanelHeader}" ColumnDefinitions="*,Auto" Margin="12,0,6,0">
+        <TextBlock Classes="title" Text="New Task" />
+        <Button Grid.Column="1" Theme="{StaticResource IconButton}" Command="{Binding CancelCreateCommand}"
+                ToolTip.Tip="Close" AutomationProperties.Name="Close New Task">
+          <Path Classes="icon" Data="{StaticResource Icon.Close}" />
+        </Button>
+      </Grid>
+      <Border Grid.Row="1" Classes="divider" />
 
+      <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="12,10,12,12" Spacing="12" IsEnabled="{Binding !IsStarting}">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="label" Text="Title" />
+            <TextBox Classes="inline" Text="{Binding NewTitle}" Watermark="e.g. Add tab drag and drop" MaxLength="80" />
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Classes="label" Text="Agent" />
+            <ComboBox ItemsSource="{Binding AgentOptions}" SelectedItem="{Binding NewAgent}" AutomationProperties.Name="Agent">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="vm:AgentOptionViewModel">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding Name}" />
+                    <TextBlock Classes="status" Text="{Binding AvailabilityText}" IsVisible="{Binding !IsAvailable}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Classes="label" Text="Model" />
+            <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModelChoice}" AutomationProperties.Name="Model">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="vm:ChoiceViewModel">
+                  <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Value}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+
+          <StackPanel Spacing="4" IsVisible="{Binding NewAgentSupportsEffort}">
+            <TextBlock Classes="label" Text="Effort" />
+            <ItemsControl ItemsSource="{Binding EffortChoices}" AutomationProperties.Name="Effort">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:ChoiceViewModel">
+                  <Button Theme="{StaticResource SubtleButton}" Classes="chip" Classes.active="{Binding IsSelected}"
+                          Content="{Binding Label}"
+                          Command="{Binding $parent[UserControl].((vm:TasksViewModel)DataContext).SelectEffortChoiceCommand}"
+                          CommandParameter="{Binding}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Classes="label" Text="Prompt" />
+            <TextBox Classes="inline" Text="{Binding NewPrompt}" Watermark="Describe the task in as much detail as possible…"
+                     AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120" MaxHeight="280" VerticalContentAlignment="Top" />
+            <ItemsControl ItemsSource="{Binding ContextAttachments}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:AttachmentViewModel">
+                  <Border Classes="thumb" Margin="0,4,6,0" ToolTip.Tip="{Binding FileName}">
+                    <Panel>
+                      <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                      <Button Theme="{StaticResource TabCloseButton}" Classes="thumbclose" HorizontalAlignment="Right" VerticalAlignment="Top" ToolTip.Tip="Remove"
+                              Command="{Binding $parent[UserControl].((vm:TasksViewModel)DataContext).RemoveContextCommand}"
+                              CommandParameter="{Binding}">
+                        <Path Classes="icon" Data="{StaticResource Icon.Close}" />
+                      </Button>
+                    </Panel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Theme="{StaticResource SubtleButton}" HorizontalAlignment="Left" Command="{Binding AddContextCommand}"
+                    IsVisible="{Binding CanAddContext}" ToolTip.Tip="Attach an image to the task prompt">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Classes="icon" Data="{StaticResource Icon.Image}" />
+                <TextBlock Text="Attach image" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+
+          <TextBlock Classes="status" Text="{Binding NewAgentHint}" TextWrapping="Wrap"
+                     IsVisible="{Binding NewAgentHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+      </ScrollViewer>
+
+      <Border Grid.Row="3" Classes="divider" />
+      <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" Margin="12,8" IsEnabled="{Binding !IsStarting}">
+        <CheckBox Content="Start now" IsChecked="{Binding StartAfterCreate}" VerticalAlignment="Center"
+                  ToolTip.Tip="Uncheck to queue the task and start it later from the list." />
+        <Button Grid.Column="1" Classes="formAction" Content="Cancel" Command="{Binding CancelCreateCommand}" Margin="0,0,6,0" />
+        <Button Grid.Column="2" Classes="formAction accent" Content="Create" Command="{Binding CreateCommand}" />
+      </Grid>
+    </Grid>
     <!-- Task list -->
-    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding !IsCreating}">
       <StackPanel Margin="6,0,6,8">
         <TextBlock Classes="muted" Margin="6,6" Text="No tasks yet." IsVisible="{Binding HasNoTasks}" />
         <ItemsControl ItemsSource="{Binding Tasks}">
@@ -109,6 +208,8 @@
                     </ItemsControl>
 
                     <WrapPanel Orientation="Horizontal">
+                      <Button Content="Start" IsVisible="{Binding IsQueued}" IsEnabled="{Binding !IsBusy}" Margin="0,0,6,0"
+                              Command="{Binding $parent[UserControl].((vm:TasksViewModel)DataContext).StartQueuedCommand}" CommandParameter="{Binding}" />
                       <Button Content="Open" Margin="0,0,6,0" IsEnabled="{Binding CanOpen}" ToolTip.Tip="Show the worktree in the explorer"
                               Command="{Binding $parent[UserControl].((vm:TasksViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}" />
                       <Button Content="Merge" Margin="0,0,6,0" IsEnabled="{Binding CanMerge}"

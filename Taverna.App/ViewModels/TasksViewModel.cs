@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Taverna.Core.Agents;
 using Taverna.Core.Git;
+using Taverna.Core.Chat;
 using Taverna.Core.Orchestration;
 
 namespace Taverna.App.ViewModels;
@@ -19,6 +20,56 @@ public partial class TasksViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Closes editor tabs inside a worktree before it is deleted; false when the user cancels.</summary>
     private readonly Func<string, Task<bool>> releaseWorktree;
     private TaskOrchestrator? orchestrator;
+    private string? projectRoot;
+    private readonly Func<Task<string?>> pickImage;
+    public ObservableCollection<AttachmentViewModel> ContextAttachments { get; } = new();
+    [ObservableProperty] private bool startAfterCreate = true;
+    public bool CanAddContext => NewAgent?.SupportsImages == true;
+    public ObservableCollection<ChoiceViewModel> ModelChoices { get; } = new();
+    public ChoiceViewModel? SelectedModelChoice
+    {
+        get => ModelChoices.FirstOrDefault(m => m.Value == NewModel);
+        set { if (value is not null) NewModel = value.Value; }
+    }
+    /// <summary>Effort chips for the chosen model; "Default" leaves the agent's own setting.</summary>
+    public ObservableCollection<ChoiceViewModel> EffortChoices { get; } = new();
+    [RelayCommand] private void SelectEffortChoice(ChoiceViewModel? choice) { if (choice is not null) NewEffort = choice.Value; }
+
+    private void NotifyExecutionChoices()
+    {
+        var efforts = NewEfforts;
+        if (!EffortChoices.Select(c => c.Value).SequenceEqual(efforts))
+        {
+            EffortChoices.Clear();
+            foreach (var effort in efforts) EffortChoices.Add(new ChoiceViewModel(effort));
+        }
+        foreach (var choice in EffortChoices) choice.IsSelected = choice.Value == (NewEffort ?? AgentOptionViewModel.DefaultChoice);
+        OnPropertyChanged(nameof(NewAgentSupportsEffort));
+        OnPropertyChanged(nameof(SelectedModelChoice));
+    }
+    partial void OnNewModelChanged(string? value)
+    {
+        NewEffort = NewAgent?.ValidEffort(value, NewEffort) ?? AgentOptionViewModel.DefaultChoice;
+        NotifyExecutionChoices();
+    }
+    partial void OnNewEffortChanged(string? value) => NotifyExecutionChoices();
+
+    [RelayCommand]
+    private async Task AddContextAsync()
+    {
+        if (!CanAddContext || projectRoot is null) return;
+        var root = projectRoot;
+        var path = await pickImage();
+        if (path is null || root != projectRoot) return;
+        try
+        {
+            var relative = await AttachmentStore.ImportAsync(root, path);
+            if (root == projectRoot) ContextAttachments.Add(new AttachmentViewModel(root, relative));
+        }
+        catch (Exception ex) { reportError(ex.Message); }
+    }
+    [RelayCommand] private void RemoveContext(AttachmentViewModel? attachment)
+    { if (attachment is not null) ContextAttachments.Remove(attachment); }
 
     public ObservableCollection<TaskItemViewModel> Tasks { get; } = new();
     public IReadOnlyList<AgentOptionViewModel> AgentOptions { get; }
@@ -27,7 +78,9 @@ public partial class TasksViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty] private bool isCreating;
     [ObservableProperty] private string newTitle = "";
     [ObservableProperty] private string newPrompt = "";
-    [ObservableProperty] private string? newModel = AgentOptionViewModel.DefaultChoice;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NewEfforts))]
+    private string? newModel = AgentOptionViewModel.DefaultChoice;
     [ObservableProperty] private string? newEffort = AgentOptionViewModel.DefaultChoice;
     [ObservableProperty] private bool isStarting;
 
@@ -36,19 +89,21 @@ public partial class TasksViewModel : ObservableObject, IAsyncDisposable
     private AgentOptionViewModel? newAgent;
 
     public IReadOnlyList<string> NewModels => NewAgent?.Models ?? [];
-    public IReadOnlyList<string> NewEfforts => NewAgent?.Efforts ?? [];
-    public bool NewAgentSupportsEffort => NewAgent?.SupportsEffort == true;
+    public IReadOnlyList<string> NewEfforts => NewAgent?.EffortsFor(NewModel) ?? [];
+    public bool NewAgentSupportsEffort => NewEfforts.Count > 1;
     public string? NewAgentHint => NewAgent is null ? null : orchestrator?.CannotStartReason(NewAgent.Kind);
 
     public int ActiveCount => Tasks.Count(t => t.IsWorking);
+    public bool HasActiveTasks => ActiveCount > 0;
     public bool HasNoTasks => Tasks.Count == 0;
     public string HeaderBadge => ActiveCount > 0 ? ActiveCount.ToString() : "";
 
     public TasksViewModel(GitService git, IReadOnlyDictionary<AgentKind, IAgentRunner> runners, Action<string> reportError,
         Func<string, string, string, Task<bool>> confirm, Action<TaskItemViewModel> openWorktree,
-        Func<string, Task<bool>> releaseWorktree)
+        Func<string, Task<bool>> releaseWorktree, Func<Task<string?>>? pickImage = null)
     {
         this.releaseWorktree = releaseWorktree;
+        this.pickImage = pickImage ?? (() => Task.FromResult<string?>(null));
         this.git = git;
         this.runners = runners;
         this.reportError = reportError;
@@ -56,6 +111,9 @@ public partial class TasksViewModel : ObservableObject, IAsyncDisposable
         this.openWorktree = openWorktree;
         AgentOptions = AgentRunnerCatalog.TaskAgents.Select(kind => new AgentOptionViewModel(runners[kind])).ToList();
         newAgent = AgentOptions.FirstOrDefault(a => a.IsAvailable) ?? AgentOptions[0];
+        foreach (var model in newAgent.ModelChoices) ModelChoices.Add(model);
+        newModel = newAgent.Runner.Capabilities.Models.FirstOrDefault() ?? AgentOptionViewModel.DefaultChoice;
+        NotifyExecutionChoices();
         logTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) => RefreshDirtyLogs());
         logTimer.Start();
     }
@@ -65,13 +123,22 @@ public partial class TasksViewModel : ObservableObject, IAsyncDisposable
 
     partial void OnNewAgentChanged(AgentOptionViewModel? value)
     {
-        NewModel = AgentOptionViewModel.DefaultChoice;
+        ModelChoices.Clear();
+        if (value is not null) foreach (var model in value.ModelChoices) ModelChoices.Add(model);
+        NewModel = value?.Runner.Capabilities.Models.FirstOrDefault() ?? AgentOptionViewModel.DefaultChoice;
         NewEffort = AgentOptionViewModel.DefaultChoice;
+        OnPropertyChanged(nameof(ModelChoices));
+        OnPropertyChanged(nameof(CanAddContext));
+        NotifyExecutionChoices();
     }
 
     /// <summary>Switches to another project's tasks. Running tasks of the previous project are stopped.</summary>
     public async Task AttachAsync(string? projectRoot)
     {
+        this.projectRoot = projectRoot;
+        ContextAttachments.Clear();
+        NewTitle = "";
+        NewPrompt = "";
         if (orchestrator is not null)
         {
             orchestrator.TaskChanged -= OnTaskChanged;
@@ -120,7 +187,7 @@ public partial class TasksViewModel : ObservableObject, IAsyncDisposable
             reportError("Title and prompt are required.");
             return;
         }
-        if (orchestrator.CannotStartReason(NewAgent.Kind) is { } reason)
+        if (StartAfterCreate && orchestrator.CannotStartReason(NewAgent.Kind) is { } reason)
         {
             reportError(reason);
             return;
@@ -129,20 +196,33 @@ public partial class TasksViewModel : ObservableObject, IAsyncDisposable
         IsStarting = true;
         try
         {
-            var task = await orchestrator.StartAsync(new TaskRequest(NewTitle, NewAgent.Kind, NewPrompt)
+            var request = new TaskRequest(NewTitle, NewAgent.Kind, NewPrompt)
             {
                 Model = AgentOptionViewModel.Normalize(NewModel),
-                Effort = AgentOptionViewModel.Normalize(NewEffort)
-            });
+                Effort = AgentOptionViewModel.Normalize(NewAgent.ValidEffort(NewModel, NewEffort)),
+                Attachments = ContextAttachments.Select(a => a.RelativePath).ToList()
+            };
+            var task = StartAfterCreate ? await orchestrator.StartAsync(request) : await orchestrator.EnqueueAsync(request);
             var item = Upsert(task);
             item.IsExpanded = true;
             LoadLog(item);
             NewTitle = "";
             NewPrompt = "";
+            ContextAttachments.Clear();
             IsCreating = false;
         }
         catch (Exception ex) { reportError(ex.Message); }
         finally { IsStarting = false; }
+    }
+
+    [RelayCommand]
+    private async Task StartQueuedAsync(TaskItemViewModel? item)
+    {
+        if (item is null || orchestrator is null) return;
+        item.IsBusy = true;
+        try { Upsert(await orchestrator.StartQueuedAsync(item.Id)); }
+        catch (Exception ex) { reportError(ex.Message); }
+        finally { item.IsBusy = false; }
     }
 
     [RelayCommand]
@@ -259,6 +339,7 @@ public partial class TasksViewModel : ObservableObject, IAsyncDisposable
     private void NotifyCounts()
     {
         OnPropertyChanged(nameof(ActiveCount));
+        OnPropertyChanged(nameof(HasActiveTasks));
         OnPropertyChanged(nameof(HasNoTasks));
         OnPropertyChanged(nameof(HeaderBadge));
         OnPropertyChanged(nameof(NewAgentHint));

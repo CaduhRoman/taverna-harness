@@ -15,7 +15,8 @@ public static class CliLocator
                      .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
             var dir = part.Trim().Trim('"');
-            foreach (var extension in extensions.Prepend(""))
+            // On Windows an extensionless file is not runnable (often a POSIX sh shim next to a .cmd/.bat).
+            foreach (var extension in OperatingSystem.IsWindows() && !Path.HasExtension(command) ? extensions : extensions.Prepend(""))
             {
                 var candidate = Path.Combine(dir, command + extension.ToLowerInvariant());
                 if (File.Exists(candidate)) return candidate;

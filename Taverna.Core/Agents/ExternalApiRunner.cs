@@ -34,6 +34,12 @@ public sealed class ExternalApiRunner(ExternalApiOptions options, HttpClient? ht
 
     public async IAsyncEnumerable<AgentEvent> RunAsync(AgentRequest request, [EnumeratorCancellation] CancellationToken ct = default)
     {
+        if (AgentPermissions.Validate(Kind, request.PermissionMode) is { } permissionError)
+        {
+            yield return new AgentEvent(AgentEventKind.Error, permissionError);
+            yield return new AgentEvent(AgentEventKind.Exit, ExitCode: -1);
+            yield break;
+        }
         if (!options.IsConfigured)
         {
             yield return new AgentEvent(AgentEventKind.Error, "External API is not configured (TAVERNA_API_BASE_URL, TAVERNA_API_KEY, TAVERNA_API_MODELS).");

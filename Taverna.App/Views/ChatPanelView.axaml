@@ -91,15 +91,15 @@
                    Text="{Binding AttachTip, StringFormat='{}{0}. Remove the images or pick Claude/Codex.'}" />
         <TextBox Name="DraftBox" Classes="composer" Text="{Binding Draft}" Watermark="{Binding Watermark}"
                  AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="200" IsEnabled="{Binding HasProject}" />
-        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
           <Button Theme="{StaticResource IconButton}" Command="{Binding AttachImageCommand}" IsEnabled="{Binding CanAttach}"
                   ToolTip.Tip="{Binding AttachTip}" ToolTip.ShowOnDisabled="True" Margin="0,0,2,0">
             <Path Classes="icon" Data="{StaticResource Icon.Image}" />
           </Button>
           <Button Grid.Column="1" Theme="{StaticResource SubtleButton}" Padding="6,3" ToolTip.Tip="Agent, model and effort"
-                  IsEnabled="{Binding HasProject}">
+                  IsEnabled="{Binding HasProject}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
             <StackPanel Orientation="Horizontal" Spacing="4">
-              <TextBlock Text="{Binding PickerLabel}" FontSize="{DynamicResource FontSize.Body}" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding PickerLabel}" MaxWidth="130" TextTrimming="CharacterEllipsis" FontSize="{DynamicResource FontSize.Body}" VerticalAlignment="Center" />
               <Path Classes="icon" Data="{StaticResource Icon.ChevronDown}" />
             </StackPanel>
             <Button.Flyout>
@@ -132,7 +132,7 @@
                                 CommandParameter="{Binding}">
                           <Grid ColumnDefinitions="18,*">
                             <Path Classes="icon" Data="{StaticResource Icon.Check}" IsVisible="{Binding IsSelected}" Width="14" />
-                            <TextBlock Grid.Column="1" Text="{Binding Value}" />
+                            <TextBlock Grid.Column="1" Text="{Binding Label}" ToolTip.Tip="{Binding Value}" />
                           </Grid>
                         </Button>
                       </DataTemplate>
@@ -162,6 +162,13 @@
             </Button.Flyout>
           </Button>
 
+          <Button Name="PermissionsButton" Grid.Column="2" Theme="{StaticResource SubtleButton}" Padding="5,3"
+                  Click="OnPermissionsClick" IsEnabled="{Binding IsIdle}" ToolTip.Tip="Permissions">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <Path Classes="icon" Data="M5,11 L5,7 Q5,5 7,5 L7,3 Q8,1 9,3 L9,7 L9,2 Q11,0 11,2 L11,7 L11,3 Q13,1 13,3 L13,8 Q15,6 15,9 L15,12 Q15,16 10,16 Q7,16 5,13 L2,10 Q2,8 4,9 Z" />
+              <TextBlock Classes="status" Text="{Binding PermissionLabel}" />
+            </StackPanel>
+          </Button>
           <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2">
             <Button Theme="{StaticResource IconButton}" Classes="primary" Command="{Binding SendCommand}" IsVisible="{Binding IsIdle}"
                     IsEnabled="{Binding CanSend}" ToolTip.Tip="Send (Enter)">

@@ -3,7 +3,7 @@ using Taverna.Core.Git;
 
 namespace Taverna.Core.Orchestration;
 
-public enum AgentTaskStatus { Idle, Working, Done, Error }
+public enum AgentTaskStatus { Idle, Working, Done, Error, Queued }
 
 public enum TaskMergeState { None, Merged, Conflict, Failed }
 
@@ -19,6 +19,7 @@ public sealed class AgentTask
     public AgentKind Agent { get; set; }
     public string? Model { get; set; }
     public string? Effort { get; set; }
+    public List<string> Attachments { get; set; } = [];
 
     public string RepositoryRoot { get; set; } = "";
     public string WorktreePath { get; set; } = "";
@@ -53,6 +54,7 @@ public sealed class AgentTask
     {
         var copy = (AgentTask)MemberwiseClone();
         copy.ChangedFiles = [.. ChangedFiles];
+        copy.Attachments = [.. Attachments];
         copy.ConflictFiles = [.. ConflictFiles];
         return copy;
     }
@@ -60,6 +62,7 @@ public sealed class AgentTask
 
 public sealed record TaskRequest(string Title, AgentKind Agent, string Prompt)
 {
+    public IReadOnlyList<string> Attachments { get; init; } = [];
     public string? Model { get; init; }
     public string? Effort { get; init; }
 }

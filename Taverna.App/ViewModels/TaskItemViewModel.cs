@@ -31,6 +31,7 @@ public partial class TaskItemViewModel : ObservableObject
     public string BaseCommit => Model.BaseCommit.Length > 10 ? Model.BaseCommit[..10] : Model.BaseCommit;
     public string WorktreePath => Model.WorktreePath;
     public bool IsWorking => Model.IsActive;
+    public bool IsQueued => Model.Status == AgentTaskStatus.Queued;
     public bool HasConflict => Model.MergeState == TaskMergeState.Conflict;
     public IReadOnlyList<string> ConflictFiles => Model.ConflictFiles;
 
@@ -44,7 +45,7 @@ public partial class TaskItemViewModel : ObservableObject
 
     /// <summary>Status dot: pulsing while working, hollow on error or conflict, solid when done.</summary>
     public bool IsErrorState => Model.Status == AgentTaskStatus.Error || Model.MergeState == TaskMergeState.Conflict;
-    public bool IsDoneState => !IsWorking && !IsErrorState;
+    public bool IsDoneState => !IsWorking && !IsErrorState && !IsQueued;
     public bool HasDetail => !string.IsNullOrEmpty(Detail);
     public bool HasChangedFiles => ChangedFiles.Count > 0;
     public string Meta => string.IsNullOrEmpty(Branch) ? AgentName : $"{AgentName} · {Branch}";

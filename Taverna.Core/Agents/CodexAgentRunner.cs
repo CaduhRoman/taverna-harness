@@ -5,18 +5,28 @@ namespace Taverna.Core.Agents;
 /// <summary>
 /// Codex CLI (`codex exec --json`). The prompt is read from stdin via `-`; images use the documented
 /// `--image` flag. Codex emits whole agent messages, not token deltas.
+/// Models and efforts come from the local Codex setup, so custom providers (e.g. a ChatGPT web bridge) appear.
 /// </summary>
-public sealed class CodexAgentRunner : CliAgentRunner
+public sealed class CodexAgentRunner(CodexSetup? setup = null) : CliAgentRunner
 {
-    private static readonly AgentCapabilities Caps = new(
-        Models: [],
-        Efforts: ["minimal", "low", "medium", "high", "xhigh"],
-        SupportsImages: true);
+    private static readonly IReadOnlyList<string> FallbackEfforts = ["minimal", "low", "medium", "high", "xhigh"];
+
+    private readonly CodexSetup setup = setup ?? CodexSetup.Default();
 
     public override AgentKind Kind => AgentKind.Codex;
     public override string Name => "Codex";
-    public override AgentCapabilities Capabilities => Caps;
     protected override string Command => "codex";
+    public override AgentCapabilities Capabilities => AgentCapabilities.From(setup.Models, FallbackEfforts, supportsImages: true);
+
+    protected override async Task<string?> PreflightAsync(AgentRequest request, CancellationToken ct)
+    {
+        // Explicit models are checked in validation; "Default" means the model from config.toml
+        // (ChatGPT web models accept only medium/high).
+        if (request.Model is null && request.Effort is { } effort &&
+            Capabilities.EffortsFor(setup.ConfiguredModel) is { } supported && !supported.Contains(effort))
+            return $"{setup.ConfiguredModel} does not accept effort \"{effort}\" (supported: {string.Join(", ", supported)}).";
+        return await setup.CheckLocalEndpointAsync(ct);
+    }
 
     protected override IReadOnlyList<string> Arguments(AgentRequest request, string workingDirectory)
     {
@@ -26,6 +36,8 @@ public sealed class CodexAgentRunner : CliAgentRunner
             "--sandbox", request.Mode == AgentRunMode.Summary ? "read-only" : "workspace-write",
             "-C", workingDirectory
         };
+        if (request.Mode == AgentRunMode.Chat && request.PermissionMode == AgentPermissionMode.Auto)
+            args.AddRange(["-c", "approval_policy=\"never\""]);
         if (request.Model is { } model) args.AddRange(["-m", model]);
         if (request.Effort is { } effort) args.AddRange(["-c", $"model_reasoning_effort=\"{effort}\""]);
         foreach (var image in request.Images) args.AddRange(["--image", image]);

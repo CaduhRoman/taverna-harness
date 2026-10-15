@@ -11,6 +11,8 @@ namespace Taverna.App.Views;
 public partial class ChatPanelView : UserControl
 {
     private bool followTail = true;
+    public event Action<Control>? PermissionsRequested;
+    private void OnPermissionsClick(object? sender, RoutedEventArgs e) => PermissionsRequested?.Invoke(PermissionsButton);
 
     public ChatPanelView()
     {

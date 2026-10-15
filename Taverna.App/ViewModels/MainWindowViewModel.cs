@@ -47,12 +47,6 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty] private string? errorMessage;
 
-    /// <summary>The right panel shows either the chat or the task list.</summary>
-    [ObservableProperty] private bool showTasks;
-
-    [RelayCommand] private void ShowChatPanel() => ShowTasks = false;
-    [RelayCommand] private void ShowTasksPanel() => ShowTasks = true;
-
     public string? ExplorerRoot => BrowsedTask?.WorktreePath ?? ProjectDirectory;
     public bool IsBrowsingWorktree => BrowsedTask is not null;
 
@@ -101,7 +95,7 @@ public partial class MainWindowViewModel : ObservableObject
         PrimaryPane = new EditorPaneViewModel(this, isPrimary: true) { IsActive = true };
         SecondaryPane = new EditorPaneViewModel(this, isPrimary: false);
         activePane = PrimaryPane;
-        Tasks = new TasksViewModel(git, Runners, ReportError, confirm, task => _ = BrowseWorktreeAsync(task), CloseDocumentsUnderAsync);
+        Tasks = new TasksViewModel(git, Runners, ReportError, confirm, task => _ = BrowseWorktreeAsync(task), CloseDocumentsUnderAsync, pickImage);
         Chat = new ChatViewModel(git, Runners, ReportError, pickImage);
         Tasks.Tasks.CollectionChanged += (_, _) =>
         {

@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Taverna.App.ViewModels"
+             xmlns:views="using:Taverna.App.Views"
+             x:Class="Taverna.App.Views.ChatWorkspaceView"
+             x:DataType="vm:MainWindowViewModel" x:CompileBindings="True">
+  <Grid Name="PanelBounds" ClipToBounds="True">
+    <Grid RowDefinitions="Auto,*">
+      <Grid Height="{DynamicResource Size.PanelHeader}" ColumnDefinitions="*,Auto" Margin="12,0,6,0">
+        <TextBlock Classes="title" Text="Chat" />
+        <Button Name="TasksButton" Grid.Column="1" Classes="chip" Theme="{StaticResource SubtleButton}" Click="OnTasksClick"
+                VerticalAlignment="Center" HorizontalAlignment="Right" Height="26" Margin="0" Padding="9,3" ToolTip.Tip="Tasks">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Tasks" FontSize="{DynamicResource FontSize.Body}" VerticalAlignment="Center" />
+            <TextBlock Classes="status" Text="{Binding Tasks.HeaderBadge}" IsVisible="{Binding Tasks.HasActiveTasks}" />
+          </StackPanel>
+        </Button>
+      </Grid>
+      <views:ChatPanelView Grid.Row="1" Name="ChatView" DataContext="{Binding Chat}" />
+    </Grid>
+    <!-- An in-panel overlay: Canvas contributes no desired size to the workbench. -->
+    <Canvas Name="Overlay" ClipToBounds="True" IsVisible="False">
+      <Border Name="Popover" Background="{DynamicResource Brush.Overlay}" BorderBrush="{DynamicResource Brush.BorderStrong}"
+              BorderThickness="1" CornerRadius="{DynamicResource Radius.Island}" Padding="0" BoxShadow="0 8 24 0 #55000000" ClipToBounds="True">
+        <Panel>
+          <Panel>
+            <views:TasksPanelView Name="TasksContent" DataContext="{Binding Tasks}" IsVisible="False" />
+            <ItemsControl Name="PermissionsContent" DataContext="{Binding Chat}" ItemsSource="{Binding Permissions}" IsVisible="False"
+                          x:DataType="vm:ChatViewModel" IsEnabled="{Binding IsIdle}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:PermissionChoiceViewModel">
+                  <Button Theme="{StaticResource SubtleButton}" Classes="chip" Classes.active="{Binding IsSelected}"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,1" Padding="8"
+                          IsEnabled="{Binding IsSupported}" Click="OnPermissionClick"
+                          Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).SelectPermissionCommand}"
+                          CommandParameter="{Binding}">
+                    <Grid ColumnDefinitions="18,*,16">
+                      <Path Classes="icon" Data="{Binding Icon}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                      <StackPanel Grid.Column="1" Margin="8,0" Spacing="3">
+                        <TextBlock Text="{Binding Title}" />
+                        <TextBlock Classes="status" Text="{Binding Description}" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <Path Grid.Column="2" Classes="icon" Data="{StaticResource Icon.Check}" IsVisible="{Binding IsSelected}" />
+                    </Grid>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Panel>
+        </Panel>
+      </Border>
+    </Canvas>
+  </Grid>
+</UserControl>

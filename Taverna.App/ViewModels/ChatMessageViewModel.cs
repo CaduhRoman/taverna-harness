@@ -74,9 +74,10 @@ public partial class ChatMessageViewModel : ObservableObject
 }
 
 /// <summary>A selectable value in the agent picker (model or effort).</summary>
-public partial class ChoiceViewModel(string value) : ObservableObject
+public partial class ChoiceViewModel(string value, string? label = null) : ObservableObject
 {
     public string Value { get; } = value;
+    public string Label { get; } = label ?? value;
     [ObservableProperty] private bool isSelected;
 }
 

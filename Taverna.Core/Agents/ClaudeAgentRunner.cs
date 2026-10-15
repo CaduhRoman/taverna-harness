@@ -6,17 +6,22 @@ namespace Taverna.Core.Agents;
 /// <summary>
 /// Claude Code in print mode. The prompt and any images go through stdin as one stream-json user
 /// message; image content blocks were verified against claude 2.1.296.
+/// Models come from the account's cached catalog, as in Claude Code's own picker; the aliases are the fallback.
 /// </summary>
-public sealed class ClaudeAgentRunner : CliAgentRunner
+public sealed class ClaudeAgentRunner(ClaudeSetup? setup = null) : CliAgentRunner
 {
-    private static readonly AgentCapabilities Caps = new(
+    private static readonly AgentCapabilities Fallback = new(
         Models: ["fable", "opus", "sonnet", "haiku"],
         Efforts: ["low", "medium", "high", "xhigh", "max"],
         SupportsImages: true);
 
+    private readonly ClaudeSetup setup = setup ?? ClaudeSetup.Default();
+
     public override AgentKind Kind => AgentKind.Claude;
     public override string Name => "Claude";
-    public override AgentCapabilities Capabilities => Caps;
+
+    public override AgentCapabilities Capabilities =>
+        setup.Models is { Count: > 0 } models ? AgentCapabilities.From(models, Fallback.Efforts, supportsImages: true) : Fallback;
     protected override string Command => "claude";
 
     protected override IReadOnlyList<string> Arguments(AgentRequest request, string workingDirectory)
@@ -25,10 +30,15 @@ public sealed class ClaudeAgentRunner : CliAgentRunner
         {
             "--print", "--input-format", "stream-json", "--output-format", "stream-json",
             "--include-partial-messages", "--verbose", "--no-session-persistence",
-            // No command-running tools; file edits are auto-approved but confined to the working directory.
+            // Keep restricted file-tool protections. Auto explicitly adds command tools below;
+            // these commands are NOT isolated by an OS sandbox.
             "--restricted",
             "--permission-mode", request.Mode == AgentRunMode.Summary ? "dontAsk" : "acceptEdits"
         };
+        if (request.Mode == AgentRunMode.Chat && request.PermissionMode == AgentPermissionMode.Auto)
+            args.AddRange(["--tools", "Read,Glob,Grep,Edit,Write,Bash,PowerShell",
+                "--allowedTools", "Read,Glob,Grep,Edit,Write,Bash,PowerShell",
+                "--permission-prompts", "none"]);
         if (request.Model is { } model) args.AddRange(["--model", model]);
         if (request.Effort is { } effort) args.AddRange(["--effort", effort]);
         return args;

@@ -70,10 +70,25 @@ public sealed class TaskOrchestrator : IAsyncDisposable
         lock (sync) return CannotStartReasonLocked(agent);
     }
 
-    public async Task<AgentTask> StartAsync(TaskRequest request, CancellationToken ct = default)
+    public Task<AgentTask> StartAsync(TaskRequest request, CancellationToken ct = default) => CreateAsync(request, true, null, ct);
+
+    public Task<AgentTask> EnqueueAsync(TaskRequest request, CancellationToken ct = default) => CreateAsync(request, false, null, ct);
+
+    public Task<AgentTask> StartQueuedAsync(string id, CancellationToken ct = default)
+    {
+        var task = Find(id);
+        return CreateAsync(new TaskRequest(task.Title, task.Agent, task.Prompt)
+        { Model = task.Model, Effort = task.Effort, Attachments = task.Attachments }, true, id, ct);
+    }
+
+    private async Task<AgentTask> CreateAsync(TaskRequest request, bool start, string? queuedId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Title)) throw new ArgumentException("Title is required.");
         if (string.IsNullOrWhiteSpace(request.Prompt)) throw new ArgumentException("Prompt is required.");
+        if (!AgentRunnerCatalog.TaskAgents.Contains(request.Agent) || !runners.TryGetValue(request.Agent, out var runner))
+            throw new TaskLimitException("Unsupported task agent.");
+        if (request.Attachments.Count > 0 && !runner.Capabilities.SupportsImages)
+            throw new ArgumentException("This agent does not support image context.");
 
         var task = new AgentTask
         {
@@ -83,17 +98,26 @@ public sealed class TaskOrchestrator : IAsyncDisposable
             Agent = request.Agent,
             Model = request.Model,
             Effort = request.Effort,
+            Attachments = [.. request.Attachments],
             CreatedAt = DateTimeOffset.Now,
-            Status = AgentTaskStatus.Idle
+            Status = start ? AgentTaskStatus.Idle : AgentTaskStatus.Queued
         };
         task.LogPath = Path.Combine(".taverna", "tasks", $"{task.Id}.log");
 
         // Reserve the slot before the slow worktree creation so concurrent starts respect the limits.
         lock (sync)
         {
-            if (CannotStartReasonLocked(request.Agent) is { } reason) throw new TaskLimitException(reason);
-            tasks.Add(task);
+            if (start && CannotStartReasonLocked(request.Agent) is { } reason) throw new TaskLimitException(reason);
+            if (queuedId is not null)
+            {
+                task = tasks.FirstOrDefault(t => t.Id == queuedId && t.Status == AgentTaskStatus.Queued)
+                    ?? throw new InvalidOperationException("Task is no longer queued.");
+                task.Status = AgentTaskStatus.Idle;
+            }
+            else tasks.Add(task);
         }
+
+        if (!start) { await PersistAsync(); Raise(task); return Snapshot(task); }
 
         try
         {
@@ -111,7 +135,11 @@ public sealed class TaskOrchestrator : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            lock (sync) tasks.Remove(task);
+            lock (sync)
+            {
+                if (queuedId is not null) task.Status = AgentTaskStatus.Queued;
+                else tasks.Remove(task);
+            }
             throw new InvalidOperationException($"Could not create worktree: {ex.Message}", ex);
         }
 
@@ -248,6 +276,7 @@ public sealed class TaskOrchestrator : IAsyncDisposable
         {
             Model = task.Model,
             Effort = task.Effort,
+            Images = task.Attachments.Select(a => Path.GetFullPath(Path.Combine(projectRoot, a))).ToList(),
             Mode = AgentRunMode.Task
         };
         using var pollStop = new CancellationTokenSource();

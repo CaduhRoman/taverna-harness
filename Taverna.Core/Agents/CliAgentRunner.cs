@@ -21,6 +21,9 @@ public abstract class CliAgentRunner : IAgentRunner
     /// <summary>True when the prompt itself travels as a process argument.</summary>
     protected virtual bool PromptInArguments => false;
 
+    /// <summary>Runner-specific checks after validation, before the process starts; returns an error to report.</summary>
+    protected virtual Task<string?> PreflightAsync(AgentRequest request, CancellationToken ct) => Task.FromResult<string?>(null);
+
     public bool IsAvailable() => CliLocator.Find(Command) is not null;
 
     public async IAsyncEnumerable<AgentEvent> RunAsync(AgentRequest request, [EnumeratorCancellation] CancellationToken ct = default)
@@ -28,6 +31,12 @@ public abstract class CliAgentRunner : IAgentRunner
         if (Validate(request) is { } problem)
         {
             yield return new AgentEvent(AgentEventKind.Error, problem);
+            yield return new AgentEvent(AgentEventKind.Exit, ExitCode: -1);
+            yield break;
+        }
+        if (await PreflightAsync(request, ct) is { } preflightProblem)
+        {
+            yield return new AgentEvent(AgentEventKind.Error, preflightProblem);
             yield return new AgentEvent(AgentEventKind.Exit, ExitCode: -1);
             yield break;
         }
@@ -112,10 +121,15 @@ public abstract class CliAgentRunner : IAgentRunner
 
     private string? Validate(AgentRequest request)
     {
+        if (AgentPermissions.Validate(Kind, request.PermissionMode) is { } permissionError) return permissionError;
         if (string.IsNullOrWhiteSpace(request.Prompt)) return "Empty prompt.";
         if (!Directory.Exists(request.WorkingDirectory)) return $"Directory not found: {request.WorkingDirectory}";
         if (!AgentCapabilities.IsSafeToken(request.Model)) return $"Invalid model name: {request.Model}";
         if (!AgentCapabilities.IsSafeToken(request.Effort)) return $"Invalid effort: {request.Effort}";
+        if (request.Effort is { } effort && Capabilities.EffortsFor(request.Model) is { } supported && !supported.Contains(effort))
+            return supported.Count == 0
+                ? $"{request.Model} does not accept an effort setting."
+                : $"{request.Model} does not accept effort \"{effort}\" (supported: {string.Join(", ", supported)}).";
         if (request.Images.Count > 0 && !Capabilities.SupportsImages) return $"{Name} does not accept image attachments.";
         foreach (var image in request.Images)
             if (!File.Exists(image)) return $"Attachment not found: {image}";

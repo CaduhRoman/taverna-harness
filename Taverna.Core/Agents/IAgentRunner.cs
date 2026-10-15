@@ -9,6 +9,7 @@ public sealed record AgentRequest(string Prompt, string WorkingDirectory)
 {
     public string? Model { get; init; }
     public string? Effort { get; init; }
+    public AgentPermissionMode? PermissionMode { get; init; }
     /// <summary>Absolute image paths. Runners without confirmed image input reject non-empty lists.</summary>
     public IReadOnlyList<string> Images { get; init; } = [];
     public AgentRunMode Mode { get; init; } = AgentRunMode.Chat;
