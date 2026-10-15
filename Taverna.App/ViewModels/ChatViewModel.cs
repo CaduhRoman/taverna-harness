@@ -21,6 +21,9 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
     private string? projectRoot;
 
     public ObservableCollection<ChatMessageViewModel> Messages { get; } = new();
+    /// <summary>Images attached to the draft, already copied into .taverna/attachments/.</summary>
+    public ObservableCollection<AttachmentViewModel> PendingAttachments { get; } = new();
+    private readonly Func<Task<string?>> pickImage;
     public IReadOnlyList<ChatAgentViewModel> Agents { get; }
     public ObservableCollection<ChoiceViewModel> Models { get; } = new();
     public ObservableCollection<ChoiceViewModel> Efforts { get; } = new();
@@ -57,7 +60,16 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
     public bool IsEmpty => Messages.Count == 0;
     public bool SupportsEffort => SelectedAgent.Option.SupportsEffort;
     public string Watermark => HasProject ? $"Message {SelectedAgent.Name}…" : "Open a folder to chat";
-    public bool CanSend => HasProject && !IsBusy && SelectedAgent.IsAvailable && !string.IsNullOrWhiteSpace(Draft);
+    public bool HasPendingAttachments => PendingAttachments.Count > 0;
+
+    /// <summary>Only agents whose CLI image input was confirmed accept attachments.</summary>
+    public bool CanAttach => HasProject && !IsBusy && SelectedAgent.Option.SupportsImages;
+    public string AttachTip => SelectedAgent.Option.SupportsImages ? "Attach image (or paste)" : $"{SelectedAgent.Name} does not accept images";
+    /// <summary>Shown when the draft holds images the selected agent cannot receive.</summary>
+    public bool AttachmentsBlocked => HasPendingAttachments && !SelectedAgent.Option.SupportsImages;
+
+    public bool CanSend => HasProject && !IsBusy && SelectedAgent.IsAvailable && !AttachmentsBlocked &&
+                           (!string.IsNullOrWhiteSpace(Draft) || HasPendingAttachments);
 
     /// <summary>"Claude · opus · high", omitting defaults.</summary>
     public string PickerLabel
@@ -71,8 +83,10 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
-    public ChatViewModel(GitService git, IReadOnlyDictionary<AgentKind, IAgentRunner> runners, Action<string> reportError)
+    public ChatViewModel(GitService git, IReadOnlyDictionary<AgentKind, IAgentRunner> runners, Action<string> reportError,
+        Func<Task<string?>> pickImage)
     {
+        this.pickImage = pickImage;
         this.git = git;
         this.runners = runners;
         this.reportError = reportError;
@@ -82,6 +96,70 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
         selectedAgent.IsSelected = true;
         RebuildChoices();
         Messages.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsEmpty));
+        PendingAttachments.CollectionChanged += (_, _) => NotifyAttachments();
+    }
+
+    partial void OnSelectedAgentChanged(ChatAgentViewModel value) => NotifyAttachments();
+    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(CanAttach));
+    partial void OnHasProjectChanged(bool value) => OnPropertyChanged(nameof(CanAttach));
+
+    private void NotifyAttachments()
+    {
+        OnPropertyChanged(nameof(HasPendingAttachments));
+        OnPropertyChanged(nameof(CanAttach));
+        OnPropertyChanged(nameof(AttachTip));
+        OnPropertyChanged(nameof(AttachmentsBlocked));
+        OnPropertyChanged(nameof(CanSend));
+    }
+
+    [RelayCommand]
+    private async Task AttachImageAsync()
+    {
+        if (!CanAttach || projectRoot is null) return;
+        var path = await pickImage();
+        if (path is null) return;
+        try
+        {
+            var relative = await AttachmentStore.ImportAsync(projectRoot, path);
+            PendingAttachments.Add(new AttachmentViewModel(projectRoot, relative));
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            reportError($"Could not attach image: {ex.Message}");
+        }
+    }
+
+    /// <summary>Stores an image pasted from the clipboard. Returns false when attachments are not allowed now.</summary>
+    public async Task<bool> PasteImageAsync(byte[] data, string extension)
+    {
+        if (projectRoot is null) return false;
+        if (!CanAttach)
+        {
+            reportError(AttachTip);
+            return false;
+        }
+        try
+        {
+            var relative = await AttachmentStore.SaveAsync(projectRoot, data, extension);
+            PendingAttachments.Add(new AttachmentViewModel(projectRoot, relative));
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            reportError($"Could not attach image: {ex.Message}");
+            return false;
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveAttachment(AttachmentViewModel? attachment)
+    {
+        if (attachment is null) return;
+        PendingAttachments.Remove(attachment);
+        // Never sent, so the copy is not referenced by any message.
+        if (projectRoot is not null)
+            try { File.Delete(Path.Combine(projectRoot, attachment.RelativePath)); }
+            catch (IOException) { }
     }
 
     public async Task AttachAsync(string? root)
@@ -93,6 +171,7 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
             session = null;
         }
         Messages.Clear();
+        PendingAttachments.Clear();
         IsBusy = false;
         ActivityText = null;
         projectRoot = root;
@@ -168,13 +247,15 @@ public partial class ChatViewModel : ObservableObject, IAsyncDisposable
         var request = new ChatSendRequest(Draft, SelectedAgent.Option.Kind)
         {
             Model = AgentOptionViewModel.Normalize(SelectedModel),
-            Effort = SupportsEffort ? AgentOptionViewModel.Normalize(SelectedEffort) : null
+            Effort = SupportsEffort ? AgentOptionViewModel.Normalize(SelectedEffort) : null,
+            Attachments = PendingAttachments.Select(a => a.RelativePath).ToList()
         };
         Task sending;
         try { sending = session.SendAsync(request); }
         catch (Exception ex) { reportError(ex.Message); return; }
 
         Draft = "";
+        PendingAttachments.Clear();
         IsBusy = true;
         try { await sending; }
         catch (Exception ex) { reportError($"Send failed: {ex.Message}"); }

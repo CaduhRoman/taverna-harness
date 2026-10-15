@@ -35,6 +35,22 @@
               <Border Classes="message" Classes.user="{Binding IsUser}">
                 <StackPanel Spacing="4">
                   <TextBlock Classes="status" Text="{Binding Header}" TextTrimming="CharacterEllipsis" />
+                  <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="vm:AttachmentViewModel">
+                        <Border Classes="thumb" ToolTip.Tip="{Binding RelativePath}">
+                          <Panel>
+                            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                            <TextBlock Classes="status" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" Margin="4"
+                                       VerticalAlignment="Center" IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNull}}" />
+                          </Panel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
                   <SelectableTextBlock Text="{Binding Content}" IsVisible="{Binding HasContent}" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Ui}"
                                        Foreground="{DynamicResource Brush.Text}" LineHeight="19" />
                   <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsStreaming}">
@@ -52,10 +68,35 @@
     <!-- Composer -->
     <Border Grid.Row="2" Classes="composer" Margin="8,0,8,8">
       <StackPanel Spacing="6">
+        <ItemsControl ItemsSource="{Binding PendingAttachments}" IsVisible="{Binding HasPendingAttachments}" Margin="2,2,2,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vm:AttachmentViewModel">
+              <Border Classes="thumb" ToolTip.Tip="{Binding FileName}">
+                <Panel>
+                  <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                  <Button Theme="{StaticResource TabCloseButton}" Classes="thumbclose" HorizontalAlignment="Right" VerticalAlignment="Top"
+                          Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).RemoveAttachmentCommand}"
+                          CommandParameter="{Binding}" ToolTip.Tip="Remove">
+                    <Path Classes="icon" Data="{StaticResource Icon.Close}" />
+                  </Button>
+                </Panel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Classes="status" Margin="4,0" IsVisible="{Binding AttachmentsBlocked}" TextWrapping="Wrap"
+                   Text="{Binding AttachTip, StringFormat='{}{0}. Remove the images or pick Claude/Codex.'}" />
         <TextBox Name="DraftBox" Classes="composer" Text="{Binding Draft}" Watermark="{Binding Watermark}"
                  AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="200" IsEnabled="{Binding HasProject}" />
-        <Grid ColumnDefinitions="Auto,*,Auto">
-          <Button Theme="{StaticResource SubtleButton}" Padding="6,3" ToolTip.Tip="Agent, model and effort"
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+          <Button Theme="{StaticResource IconButton}" Command="{Binding AttachImageCommand}" IsEnabled="{Binding CanAttach}"
+                  ToolTip.Tip="{Binding AttachTip}" ToolTip.ShowOnDisabled="True" Margin="0,0,2,0">
+            <Path Classes="icon" Data="{StaticResource Icon.Image}" />
+          </Button>
+          <Button Grid.Column="1" Theme="{StaticResource SubtleButton}" Padding="6,3" ToolTip.Tip="Agent, model and effort"
                   IsEnabled="{Binding HasProject}">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <TextBlock Text="{Binding PickerLabel}" FontSize="{DynamicResource FontSize.Body}" VerticalAlignment="Center" />
@@ -121,7 +162,7 @@
             </Button.Flyout>
           </Button>
 
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2">
             <Button Theme="{StaticResource IconButton}" Classes="primary" Command="{Binding SendCommand}" IsVisible="{Binding IsIdle}"
                     IsEnabled="{Binding CanSend}" ToolTip.Tip="Send (Enter)">
               <Path Classes="icon" Data="{StaticResource Icon.Send}" />

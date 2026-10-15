@@ -58,6 +58,7 @@ public abstract class CliAgentRunner : IAgentRunner
         try
         {
             if (!process.Start()) startError = "Process.Start returned false.";
+            else ProcessJob.Attach(process);
         }
         catch (Exception ex) { startError = ex.Message; }
 

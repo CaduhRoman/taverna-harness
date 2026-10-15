@@ -93,7 +93,7 @@ public partial class MainWindowViewModel : ObservableObject
     private IEnumerable<DocumentViewModel> AllDocuments => PrimaryPane.Documents.Concat(SecondaryPane.Documents).Distinct();
 
     public MainWindowViewModel(Func<Task<string?>> pickFolder, Func<DocumentViewModel, Task<UnsavedChoice>> confirmUnsaved,
-        Func<string, string, string, Task<bool>> confirm)
+        Func<string, string, string, Task<bool>> confirm, Func<Task<string?>> pickImage)
     {
         this.pickFolder = pickFolder;
         this.confirmUnsaved = confirmUnsaved;
@@ -102,7 +102,7 @@ public partial class MainWindowViewModel : ObservableObject
         SecondaryPane = new EditorPaneViewModel(this, isPrimary: false);
         activePane = PrimaryPane;
         Tasks = new TasksViewModel(git, Runners, ReportError, confirm, task => _ = BrowseWorktreeAsync(task), CloseDocumentsUnderAsync);
-        Chat = new ChatViewModel(git, Runners, ReportError);
+        Chat = new ChatViewModel(git, Runners, ReportError, pickImage);
         Tasks.Tasks.CollectionChanged += (_, _) =>
         {
             // A discarded worktree can no longer be shown.

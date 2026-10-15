@@ -3,6 +3,7 @@ using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Taverna.App.Services;
 using Taverna.App.ViewModels;
@@ -25,7 +26,7 @@ public partial class MainWindow : Window
     public MainWindow(string? initialFolder)
     {
         InitializeComponent();
-        viewModel = new MainWindowViewModel(PickFolderAsync, ConfirmUnsavedAsync, ConfirmAsync)
+        viewModel = new MainWindowViewModel(PickFolderAsync, ConfirmUnsavedAsync, ConfirmAsync, PickImageAsync)
         {
             IsExplorerVisible = layout.ExplorerVisible,
             IsChatVisible = layout.ChatVisible
@@ -80,6 +81,17 @@ public partial class MainWindow : Window
 
     private async Task<UnsavedChoice> ConfirmUnsavedAsync(DocumentViewModel document) =>
         await new UnsavedChangesDialog(document.Name).ShowDialog<UnsavedChoice?>(this) ?? UnsavedChoice.Cancel;
+
+    private async Task<string?> PickImageAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+        {
+            Title = "Attach image",
+            AllowMultiple = false,
+            FileTypeFilter = [new Avalonia.Platform.Storage.FilePickerFileType("Images") { Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp"] }]
+        });
+        return files.FirstOrDefault()?.TryGetLocalPath();
+    }
 
     private async Task<bool> ConfirmAsync(string heading, string message, string confirmLabel) =>
         await new ConfirmDialog(heading, message, confirmLabel).ShowDialog<bool?>(this) == true;

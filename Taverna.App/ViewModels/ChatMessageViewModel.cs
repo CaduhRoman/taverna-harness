@@ -18,6 +18,8 @@ public partial class ChatMessageViewModel : ObservableObject
     public string TimeText { get; }
     public string? RefText { get; }
     public string? ModelText { get; }
+    public IReadOnlyList<AttachmentViewModel> Attachments { get; }
+    public bool HasAttachments => Attachments.Count > 0;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasContent))]
@@ -58,6 +60,7 @@ public partial class ChatMessageViewModel : ObservableObject
             (null, var e) => e,
             var (m, e) => $"{m} · {e}"
         };
+        Attachments = message.Attachments.Select(path => new AttachmentViewModel(projectRoot, path)).ToList();
     }
 
     public string Header => string.Join("  ·  ", new[] { AuthorName, TimeText, RefText, ModelText }.Where(s => !string.IsNullOrEmpty(s)));
